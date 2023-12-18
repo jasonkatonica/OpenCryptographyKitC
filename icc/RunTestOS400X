@@ -1,0 +1,3 @@
+#! /bin/ksh
+
+echo "RunTestOS400X is obsolete"

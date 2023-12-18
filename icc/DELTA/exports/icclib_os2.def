@@ -1,0 +1,11 @@
+LIBRARY         delta  INITINSTANCE
+DATA NONSHARED
+
+DESCRIPTION     'Delta timing Shared Library'
+
+EXPORTS
+	_Delta_T
+	_Delta_res
+	_Delta2Time
+	_Delta_spanT
+	_Delta_spanC

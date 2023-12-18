@@ -1,0 +1,2 @@
+MUPPET	=
+IS_FIPS	=

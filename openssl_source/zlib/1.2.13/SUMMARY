@@ -1,0 +1,1 @@
+000_HPUX32.patch HP/UX preprocessor doesn't handle large constants
