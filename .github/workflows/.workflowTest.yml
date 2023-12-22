@@ -23,7 +23,7 @@ jobs:
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v3
-      
+
       - name: 64-bit Linux debug compile
         run: |
           cd icc
@@ -32,4 +32,23 @@ jobs:
           make -k OPSYS=AMD64_LINUX CONFIG=debug tests
           make -k OPSYS=AMD64_LINUX CONFIG=debug show_config
           cd ..
+
+  ICC-Compile:
+    # a compile only -no test -quick check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: 64-bit Linux release compile
+        run: |
+          cd icc
+          make -k OPSYS=AMD64_LINUX CONFIG=release create_all
+          make -k OPSYS=AMD64_LINUX CONFIG=release all
+          make -k OPSYS=AMD64_LINUX CONFIG=release iccpkg
+          make -k OPSYS=AMD64_LINUX CONFIG=release show_config
+          cd ..
+          cd iccpkg
+          make -k OPSYS=AMD64_LINUX CONFIG=release all
+          cd ..
+
  
