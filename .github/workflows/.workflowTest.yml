@@ -15,14 +15,16 @@ on:
 
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
-  # This workflow contains a single job called "build"
-  build:
+  # This workflow contains a single job called "ICC-Config-debug"
+  # We can add more jobs here for different OS
+  ICC-Config-debug:
     # The type of runner that the job will run on
     runs-on: ubuntu-latest
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v3
-        name: 64-bit Linux debug compil
+      
+      - name: 64-bit Linux debug compile
         run: |
           cd icc
           make OPSYS=AMD64_LINUX CONFIG=debug create_all
