@@ -126,7 +126,7 @@ icclib_sa$(OBJSUFX): icclib.c loaded.c loaded.h tracer.h extsig.h
 
 icclib_sa$(EXESUFX): icclib_sa$(OBJSUFX) $(LIBOBJS) $(STLPRFX)zlib$(STLSUFX) tmp/tmp/dummyfile extsig$(OBJSUFX) signer$(EXESUFX)
 	-$(LD) $(LDFLAGS)  icclib_sa$(OBJSUFX) $(LIBOBJS) $(STLPRFX)zlib$(STLSUFX)  tmp/tmp/*$(OBJSUFX) $(LDLIBS)
-	-./signer$(EXESUFX) ICCLIB_SA.txt  privkey.rsa -SELF -FILE icclib_sa$(EXESUFX) $(TWEAKS)
+#	-./signer$(EXESUFX) ICCLIB_SA.txt  privkey.rsa -SELF -FILE icclib_sa$(EXESUFX) $(TWEAKS)
 
 
 #- Build ICC test executables
