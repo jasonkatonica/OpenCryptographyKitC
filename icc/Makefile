@@ -432,14 +432,9 @@ tmp/tmp/dummyfile:  Build_OSSL_Complete tmp/dummyfile
 $(ICCDLL_NAME):  icclib$(OBJSUFX) $(LIBOBJS)  $(STLPRFX)zlib$(STLSUFX) tmp/tmp/dummyfile  signer$(EXESUFX) tracer.h extsig.h
 	$(SLD) $(SLDFLAGS) $(ICCLIB_LNK) $(EXPORT_FLAG)$(ICCLIB_EXPFILE)  icclib$(OBJSUFX) $(LIBOBJS) $(STLPRFX)zlib$(STLSUFX) \
 		tmp/tmp/*$(OBJSUFX)  $(LDLIBS)
-#- Unstripped goes into NOSHIP
-	./signer$(EXESUFX) ICCSIG.txt privkey.rsa -SELF -FILE $(ICCDLL_NAME) $(TWEAKS) "ICC_ALLOW_2KEY3DES=1"
-	$(CP) ICCSIG.txt $(NOSHIP_ICC_RTE_DIR)/
-	$(CP) $@ $(NOSHIP_ICC_RTE_DIR)/$@.unstripped
+
 #- Regular lib
 	$(STRIP) $@
-	./signer$(EXESUFX) ICCSIG.txt privkey.rsa -SELF -FILE $(ICCDLL_NAME) $(TWEAKS) "ICC_ALLOW_2KEY3DES=1"
-	$(CP) ICCSIG.txt $(ICC_RTE_DIR)/
 
 #
 # Add MS Authenticode signing
