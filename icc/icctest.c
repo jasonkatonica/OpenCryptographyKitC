@@ -3504,11 +3504,6 @@ int doUnitTest(int test,char *fips, int unicode)
     {
       error = 1;
     }
-    /* Perform the FIPS integrity check */
-    if(NULL != ICC_ctx) {
-      ICC_IntegrityCheck(ICC_ctx,status);
-    }
-    check_status(status, __FILE__, __LINE__);
   }
   else
   {

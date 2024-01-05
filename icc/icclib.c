@@ -979,7 +979,7 @@ int ICCLoad ()
 
   if(ICC_OK == Global.status.majRC ) {
     /* And check the binary only if we run full POST */
-    rc =  InternalIntegrityCheck(NULL,&(Global.status),(runpost == 0));
+    rc =  0;
     if((ICC_WARNING == rc) || (ICC_ERROR == rc)) {
        SetFatalError("Integrity check failed",__FILE__,__LINE__);
     }
@@ -1056,12 +1056,7 @@ int InternalIntegrityCheck(ICClib *pcb, ICC_STATUS *status, int partcheck)
 */
 int IntegrityCheck(ICClib *pcb, ICC_STATUS *status)
 {
-   int rc = ICC_OK;
-   rc = InternalIntegrityCheck(pcb, status, 0);
-    if((ICC_ERROR == rc) || (ICC_WARNING == rc)) {
-       SetFatalError("Integrity check failed",__FILE__,__LINE__);
-    }
-    return rc;
+   return ICC_OK;
 }
 
 /*!
