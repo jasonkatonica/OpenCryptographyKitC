@@ -20,7 +20,7 @@ OPENSSL_VER    = openssl-$(OPENSSL_BIN)
 # checked into source control. This option is used by iSeries/OS400 for Clearcase builds.
 
 # Where the source tree for OpenSSL will be
-OSSL_DIR       = ../$(OPENSSL_VER)$(EX_SUFFIX)
+OSSL_DIR       = $(ICC_ROOT)/$(OPENSSL_VER)$(EX_SUFFIX)
 
 # What file we use in the OpenSSL tree to trip a regen of the sources
 OSSL_TAG       = $(OSSL_DIR)/Makefile

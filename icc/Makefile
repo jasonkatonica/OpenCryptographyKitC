@@ -165,26 +165,30 @@ create_openssl: ../openssl_source/$(OPENSSL_VER)-icc.tar.gz
 # Untar the sources for the version of OpenSSL we use
 # since 1.1.1u the OpenSSL tar has icc patches applied
 # the first dir name in the archive will vary so we make an empty directory to extract
-	[ -n "$(EX_SUFFIX)" ] || \
 	( \
 	   cd .. ; \
 	   rm -r $(OPENSSL_VER) openssl ; \
 	   rm -rf x; mkdir x; cd x; \
 	   tar xzf ../openssl_source/$(OPENSSL_VER)-icc.tar.gz ; \
-	   mv `ls -d *`/openssl ../$(OPENSSL_VER) ; \
+	   mv openssl ../$(OPENSSL_VER) ; \
 	   chmod +x ../$(OPENSSL_VER)/Configure ; \
 	   cd ..; \
+	   rmdir x; \
 	)
-# Apply all the patches
+# Apply all the patches and fixes
 # rm Makefile , which SHOULDN'T BE THERE ANYWAY
 # Note: since 1.1.1u we are not applying patches.
+# ref opensslver.mk: OSSL_DIR is ../$(OPENSSL_VER)$(EX_SUFFIX) and EX_SUFFIX is usually "" so they are the same.
 	( \
-	   cd $(OSSL_DIR) ;\
-	   [ -n "$(EX_SUFFIX)" ] || \
-		sh ../openssl_source/tools/patchem2 "../openssl_source/$(OPENSSL_BIN)" ;\
-		chmod +x tools/*;\
-	   	rm -f Makefile; \
+	if [ -d $(OSSL_DIR) ] ; then \
+        cd $(OSSL_DIR) ;\
+        sh ../openssl_source/tools/patchem2 "../openssl_source/$(OPENSSL_BIN)" ;\
+        chmod +x tools/*;\
+       	rm -f Makefile; \
+	else exit 1 ; \
+	fi \
 	)
+
 
 #- Create the OpenSSL sources from tarfile and patches on zOS
 #- This has NO automated dependencies as that messes the automated builds
