@@ -28,6 +28,7 @@ jobs:
         run: |
           cd icc
           make OPSYS=AMD64_LINUX CONFIG=debug create_all
+          export LD_LIBRARY_PATH=/home/runner/work/OpenCryptographyKitC/OpenCryptographyKitC/openssl-1.1.1/
           make -k OPSYS=AMD64_LINUX CONFIG=debug all
           make -k OPSYS=AMD64_LINUX CONFIG=debug tests
           make -k OPSYS=AMD64_LINUX CONFIG=debug show_config
@@ -43,6 +44,7 @@ jobs:
         run: |
           cd icc
           make -k OPSYS=AMD64_LINUX CONFIG=release create_all
+          export LD_LIBRARY_PATH=/home/runner/work/OpenCryptographyKitC/OpenCryptographyKitC/openssl-1.1.1/
           make -k OPSYS=AMD64_LINUX CONFIG=release all
           make -k OPSYS=AMD64_LINUX CONFIG=release iccpkg
           make -k OPSYS=AMD64_LINUX CONFIG=release show_config
