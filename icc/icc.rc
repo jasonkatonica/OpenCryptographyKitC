@@ -13,11 +13,11 @@
 #undef APSTUDIO_READONLY_SYMBOLS
 
 /////////////////////////////////////////////////////////////////////////////
-// English (Australia) resources
+// English resources
 
 #if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_ENA)
 #ifdef _WIN32
-LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_AUS
+LANGUAGE LANG_ENGLISH, SUBLANG_DEFAULT
 #pragma code_page(1252)
 #endif //_WIN32
 
@@ -48,11 +48,9 @@ BEGIN
             VALUE "CompanyName", "IBM\0"
             VALUE "FileDescription", ICC_DESCRIPTION1
             VALUE "FileVersion", ICC_PRODUCT_VERSION
-            VALUE "InternalName", "ICC\0"
-            VALUE "LegalCopyright", "Licensed Materials - Property of IBM ICC (C) Copyright IBM Corp. 2002, 2018 All Rights Reserved.  US Government Users Restricted Rights - Use, duplication or disclosure restricted by GSA ADP Schedule Contract with IBM Corp.\0"
-            VALUE "LegalTrademarks", "IBM\0"
+            VALUE "InternalName", "OCKC\0"
             VALUE "OriginalFilename", "icc.lib\0"
-            VALUE "ProductName", "IBM ICC"
+            VALUE "ProductName", "OpenCryptographyKitC"
             VALUE "ProductVersion", ICC_PRODUCT_VERSION
         END
     END
@@ -90,7 +88,7 @@ END
 
 #endif    // APSTUDIO_INVOKED
 
-#endif    // English (Australia) resources
+#endif    // English resources
 /////////////////////////////////////////////////////////////////////////////
 
 
