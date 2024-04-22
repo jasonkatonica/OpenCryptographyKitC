@@ -437,12 +437,12 @@ $(ICCDLL_NAME): privkey.rsa icclib$(OBJSUFX) $(LIBOBJS)  $(STLPRFX)zlib$(STLSUFX
 	$(SLD) $(SLDFLAGS) $(ICCLIB_LNK) $(EXPORT_FLAG)$(ICCLIB_EXPFILE)  icclib$(OBJSUFX) $(LIBOBJS) $(STLPRFX)zlib$(STLSUFX) \
 		tmp/tmp/*$(OBJSUFX)  $(LDLIBS)
 #- Unstripped goes into NOSHIP
-	./signer$(EXESUFX) ICCSIG.txt privkey.rsa -SELF -FILE $(ICCDLL_NAME) $(TWEAKS) "ICC_ALLOW_2KEY3DES=1"
+	$(OPENSSL_PATH_SETUP) ./signer$(EXESUFX) ICCSIG.txt privkey.rsa -SELF -FILE $(ICCDLL_NAME) $(TWEAKS) "ICC_ALLOW_2KEY3DES=1"
 	$(CP) ICCSIG.txt $(NOSHIP_ICC_RTE_DIR)/
 	$(CP) $@ $(NOSHIP_ICC_RTE_DIR)/$@.unstripped
 #- Regular lib
 	$(STRIP) $@
-	./signer$(EXESUFX) ICCSIG.txt privkey.rsa -SELF -FILE $(ICCDLL_NAME) $(TWEAKS) "ICC_ALLOW_2KEY3DES=1"
+	$(OPENSSL_PATH_SETUP) ./signer$(EXESUFX) ICCSIG.txt privkey.rsa -SELF -FILE $(ICCDLL_NAME) $(TWEAKS) "ICC_ALLOW_2KEY3DES=1"
 	$(CP) ICCSIG.txt $(ICC_RTE_DIR)/
 
 #
@@ -463,7 +463,7 @@ $(ICC_RTE_DIR)/$(SHLPRFX)icclib$(VTAG).dll: $(ICCDLL_NAME) signer$(EXESUFX)
 		fi ;\
 	)
 	$(CP) $@ $(ICCDLL_NAME)
-	./signer$(EXESUFX) ICCSIG.txt privkey.rsa -SELF -FILE  $(ICCDLL_NAME) $(TWEAKS)
+	$(OPENSSL_PATH_SETUP) ./signer$(EXESUFX) ICCSIG.txt privkey.rsa -SELF -FILE  $(ICCDLL_NAME) $(TWEAKS)
 	$(CP) $(ICCDLL_NAME) $@
 	$(CP) ICCSIG.txt $(ICC_RTE_DIR)/ 
 	-$(CP) $(SHLPRFX)icclib$(VTAG).pdb $(SDK_DIR)/
@@ -595,10 +595,10 @@ nist_algs$(EXESUFX): nist_algs1$(OBJSUFX)
 
 #- stand alone signing tool
 privkey.rsa:
-	$(ICC_ROOT)/openssl-1.1.1/apps/openssl genrsa -out privkey.rsa 2048
+	$(OPENSSL_PATH_SETUP) $(MYOPENSSL) genrsa -out privkey.rsa 2048
 
 pubkey.h: privkey.rsa
-	$(ICC_ROOT)/openssl-1.1.1/apps/openssl rsa -in privkey.rsa -outform DER -RSAPublicKey_out > rsa_pub_key.der
+	$(OPENSSL_PATH_SETUP) $(MYOPENSSL) rsa -in privkey.rsa -outform DER -RSAPublicKey_out > rsa_pub_key.der
 	echo "/*This is an auto generated code please DO NOT modify*/" > pubkey.h
 	perl bin2hex.pl rsa_pub_key.der temp.h
 	cat temp.h >> pubkey.h
@@ -608,10 +608,10 @@ signer$(OBJSUFX): extsig.c
 	$(CC) -DSTANDALONE -DOPSYS=\"$(OPSYS)\" $(CFLAGS) -I$(OSSLINC_DIR) extsig.c $(OUT)$@
 
 signer: signer$(OBJSUFX)
-	$(LD) $(LDFLAGS) signer$(OBJSUFX) $(OSSL_DIR)/libcrypto.a $(LDLIBS)
+	$(LD) $(LDFLAGS) signer$(OBJSUFX) $(SLIBCRYPTO) $(LDLIBS)
 
 signer.exe: signer$(OBJSUFX) tmp/tmp/dummyfile $(SLIBCRYPTO)
-	$(LD) $(LDFLAGS) signer$(OBJSUFX) $(OSSL_DIR)/libcrypto_static.lib $(LDLIBS)
+	$(LD) $(LDFLAGS) signer$(OBJSUFX) $(SLIBCRYPTO) $(LDLIBS)
 
 extsig$(OBJSUFX): extsig.c
 	$(CC) $(CFLAGS) -I$(SDK_DIR)  -I$(OSSLINC_DIR) extsig.c

@@ -121,21 +121,21 @@ GenRndDataFIPS.exe : $(GENRNDFIPS_OBJS)
 #	$(CP) icclib.c $@
 
 icclib_sa$(OBJSUFX): icclib.c loaded.c loaded.h tracer.h extsig.h
-	-$(CC) -DICCDLL_NAME="\"icclib_sa$(EXESUFX)\"" -DSTANDALONE_ICCLIB  -DOPSYS="\"$(OPSYS)\"" -DMYNAME=icclib_sa$(VTAG) $(CFLAGS) \
+	$(CC) -DICCDLL_NAME="\"icclib_sa$(EXESUFX)\"" -DSTANDALONE_ICCLIB  -DOPSYS="\"$(OPSYS)\"" -DMYNAME=icclib_sa$(VTAG) $(CFLAGS) \
 		 -I../$(ZLIB) -I./  -I$(SDK_DIR) -I$(OSSLINC_DIR) -I$(OSSL_DIR) -I$(API_DIR) icclib.c $(OUT)$@
 
 icclib_sa$(EXESUFX): icclib_sa$(OBJSUFX) $(LIBOBJS) $(STLPRFX)zlib$(STLSUFX) tmp/tmp/dummyfile extsig$(OBJSUFX) signer$(EXESUFX)
-	-$(LD) $(LDFLAGS)  icclib_sa$(OBJSUFX) $(LIBOBJS) $(STLPRFX)zlib$(STLSUFX)  tmp/tmp/*$(OBJSUFX) $(LDLIBS)
-	-./signer$(EXESUFX) ICCLIB_SA.txt  privkey.rsa -SELF -FILE icclib_sa$(EXESUFX) $(TWEAKS)
+	$(LD) $(LDFLAGS)  icclib_sa$(OBJSUFX) $(LIBOBJS) $(STLPRFX)zlib$(STLSUFX)  tmp/tmp/*$(OBJSUFX) $(LDLIBS)
+	$(OPENSSL_PATH_SETUP) ./signer$(EXESUFX) ICCLIB_SA.txt  privkey.rsa -SELF -FILE icclib_sa$(EXESUFX) $(TWEAKS)
 
 
 #- Build ICC test executables
 
 smalltest$(OBJSUFX):  tools/smalltest.c $(SDK_DIR)/icc.h $(SDK_DIR)/icc_a.h $(SDK_DIR)/iccglobals.h
-	-$(CC) $(CFLAGS)  -I./ -I $(SDK_DIR) tools/smalltest.c
+	$(CC) $(CFLAGS)  -I./ -I $(SDK_DIR) tools/smalltest.c
 
 smalltest$(EXESUFX): $(ICCDLL) $(ICCLIB) smalltest$(OBJSUFX) 
-	-$(LD) $(LDFLAGS) smalltest$(OBJSUFX) $(ICCLIB) $(LDLIBS) 
+	$(LD) $(LDFLAGS) smalltest$(OBJSUFX) $(ICCLIB) $(LDLIBS)
 
 smalltest4$(OBJSUFX):  tools/smalltest4.c $(SDK_DIR)/icc.h $(SDK_DIR)/icc_a.h $(SDK_DIR)/iccglobals.h
 	-$(CC) $(CFLAGS)  -I./ -I $(SDK_DIR) tools/smalltest4.c
