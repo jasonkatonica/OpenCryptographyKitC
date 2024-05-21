@@ -599,6 +599,8 @@ pubkey.h: privkey.rsa
 	echo "/*This is an auto generated code please DO NOT modify*/" > pubkey.h
 	perl $(ICC_ROOT)/bin2hex.pl rsa_pub_key.der temp.h
 	cat temp.h >> pubkey.h
+	echo pubkey.h
+	cat pubkey.h
 	rm temp.h rsa_pub_key.der
 
 signer$(OBJSUFX): extsig.c
