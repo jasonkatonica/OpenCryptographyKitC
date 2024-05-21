@@ -43,8 +43,6 @@ OSSL_RTE_DIR   = $(RTE_DIR)/osslib
 ICC_RTE_DIR    = $(RTE_DIR)/icclib
 NOSHIP_ICC_RTE_DIR = $(NOSHIP_RTE_DIR)/icclib
 ICCPKG_DIR     = ../iccpkg
-# placeholder for a FIPS/non-FIPS hack job where the object name
-# needs to be changed for z/OS
 
 
 #- Default targets, before the makefile stubs below (some of which
@@ -78,7 +76,6 @@ PRNGTST1 = fips-prng-testprg$(EXESUFX)
 PRNGTST2 = fips-prng-testprg2$(EXESUFX)
 ICCSDK   = $(PACKAGE_DIR)/iccsdk.tar
 ICCRTE   = $(PACKAGE_DIR)/iccrte.tar
-
 
 MYOPENSSL  = $(SDK_DIR)/openssl$(EXESUFX)
 DOXYFILE   = $(SDK_DIR)/ICC_API_htm.tar
@@ -116,7 +113,7 @@ include ../iccpkg/muppet.mk
 # different object names on this platform
 # Since the FIPS ICC was already built, change ONLY the name of the object used in non-FIPS mode
 
-ifeq ($($strip $(IS_FIPS)),)
+ifeq ($(strip $(IS_FIPS)),)
    MYICC = newicc
 else
    MYICC = icc
@@ -327,7 +324,7 @@ clean_iccpkg:
 	( if [ -d ../iccpkg/ ] ; then \
 		cd ../iccpkg; \
 		unset MAKEOVERRIDES MAKELEVEL MAKEFILES ; \
-		"$(MAKE)" clean; \
+		$(MAKE) clean; \
 	  fi; \
 	)
 
@@ -600,7 +597,7 @@ privkey.rsa:
 pubkey.h: privkey.rsa
 	$(OPENSSL_PATH_SETUP) $(MYOPENSSL) rsa -in privkey.rsa -outform DER -RSAPublicKey_out > rsa_pub_key.der
 	echo "/*This is an auto generated code please DO NOT modify*/" > pubkey.h
-	perl bin2hex.pl rsa_pub_key.der temp.h
+	perl $(ICC_ROOT)/bin2hex.pl rsa_pub_key.der temp.h
 	cat temp.h >> pubkey.h
 	rm temp.h rsa_pub_key.der
 
