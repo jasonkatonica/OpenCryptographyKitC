@@ -167,6 +167,7 @@ create_openssl: ../openssl_source/$(OPENSSL_VER)-icc.tar.gz
 	   rm -r $(OPENSSL_VER) openssl ; \
 	   rm -rf x; mkdir x; cd x; \
 	   tar xzf ../openssl_source/$(OPENSSL_VER)-icc.tar.gz ; \
+	   sleep 1; \
 	   mv openssl ../$(OPENSSL_VER) ; \
 	   chmod +x ../$(OPENSSL_VER)/Configure ; \
 	   cd ..; \
@@ -597,7 +598,7 @@ privkey.rsa:
 pubkey.h: privkey.rsa
 	$(OPENSSL_PATH_SETUP) $(MYOPENSSL) rsa -in privkey.rsa -outform DER -RSAPublicKey_out > rsa_pub_key.der
 	echo "/*This is an auto generated code please DO NOT modify*/" > pubkey.h
-	perl $(ICC_ROOT)/bin2hex.pl rsa_pub_key.der temp.h
+	perl $(ICC_ROOT)/icc/bin2hex.pl rsa_pub_key.der temp.h
 	cat temp.h >> pubkey.h
 	echo pubkey.h
 	cat pubkey.h
