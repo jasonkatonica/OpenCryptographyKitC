@@ -1,0 +1,3603 @@
+#-------------------------------------------------------------------------------;
+# Copyright IBM Corp. 2023;
+#;
+# Licensed under the Apache License 2.0 (the "License").  You may not use;
+# this file except in compliance with the License.  You can obtain a copy;
+# in the file LICENSE in the source distribution.;
+#-------------------------------------------------------------------------------;
+#;
+#-------------------------------------------------------------------------------;
+# Description:;
+# Metafile to control code generation for the ICC API;
+#-------------------------------------------------------------------------------;
+#;
+#;
+#;
+#Comments start with an # and end with an ;
+#In fact, all statements must end with an ;
+# AND NO TABS ;
+#;
+# Namespacing;
+#;
+# A line with PREFIX=text; will prepend 'text' to all Generated function ;
+# names, including those referenced from OpenSSL. This allows multiple ;
+# instances of the code to exist within one process. i.e. FIPS and non-FIPS ;
+# FIPS version no prefix, OPENSSLPREFIX=C97C_;
+# Non-FIPS PREFIX=N, OPENSSLPREFIX=N97C_;
+# Note that the need for namespacing has gone away with us relinking and ;
+# hiding all the OpenSSL entry points ;
+#;
+#;
+# Flags/output ;
+#;
+#a - icc_a.c;
+#b - icc_a.h;
+#c - icclib_a.c;
+#d - icclib_a.h;
+#e - icc_aux_a.c;
+#f - icc_aux_a.h;
+#E - block on ICC internal error flag being set. i.e. FIPS initialization failed etc.;
+#P - Pass a pointer to the internal ICClib structure back down.;
+#    Most OpenSSL calls don't need this, a few do.;
+#M - Intercepted function, Public function is ICC_func();
+#    Called function in icclib.c is ICC_my_func();
+#J - Java only - the function doesn't appear in ICC headers and is only exported from the ;
+#    Java variant of the GSkit step library. This has no impact on FIPS;
+#C - Function supports the FIPS callback (i.e. Did we use a FIPS compliant algorithm) ;
+#
+#1-9 - don't generate code with this conditionally. (D39924). Untagged is;
+#      always generated.;
+# Prefix = N, non-FIPS, Prefix = C, FIPS ;
+# FIPS ;
+PREFIX=C;
+OPENSSLPREFIX=;
+
+#;
+#! @brief Get the status of a previous call.;
+#! @param status pointer to a pre-allocated ICC_STATUS variable in which status will be returned;
+#! @return ICC_OSSL_SUCCESS or ICC_FAILURE;
+#! @note This is used to retrieve the current ICC status when calls which do not themselves use ;
+#! ICC_STATUS as a parameter may have failed. ;
+#! i.e. if RSA key generation failed because the FIPS key consistancy test failed the error will ;
+#! be available via this call. ;
+
+0abcdP    int  GetStatus(ICC_STATUS* status);
+
+#;
+#! @brief Internal call. Setup the relay calls into OpenSSL;
+#! @param status pointer to a pre-allocated ICC_STATUS variable in which status will be returned;
+#! @param iccpath string which contains the root of the path where the ICC shared libs are located;
+#! @param icclibhash string containing the signature of the ICC shared library;
+#! @param cryptolibhash  string containing the signature of the OpenSSL shared library;
+#! @return anonymous pointer to OpenSSL function table. ;
+
+0acdP     void * lib_init(ICC_STATUS* status,const char* iccpath,const char* icclibhash,const char* cryptolibhash);
+
+#;
+#! @brief Set configuration data;
+#! @param status pointer to a pre-allocated ICC_STATUS variable in which status will be returned;
+#! @param valueID ID of parameter to set;
+#! @param value pointer to configuration value data;
+#! @return ICC_OK, ICC_WARNING, ICC_ERROR, ICC_FAILURE;
+#! @note ICC_FAILURE will be returned if the API has been locked by a FIPS mode failure;
+
+0abcdP    int SetValue(ICC_STATUS* status,ICC_VALUE_IDS_ENUM valueID,const void* value);
+
+#;
+#! @brief Get configuration data;
+#! @param status pointer to a pre-allocated ICC_STATUS variable in which status will be returned;
+#! @param valueID ID of parameter to get;
+#! @param value pointer to pre-allocated space to contain configuration value data;
+#! @param valueLength some of the value passed in.;
+#! @return ICC_OK, ICC_WARNING, ICC_ERROR , ICC_FAILURE;
+#! @note This call is only valid after ICC_Attach ;
+
+0abcdP    int GetValue(ICC_STATUS* status,ICC_VALUE_IDS_ENUM valueID,void* value,int valueLength);
+
+#;
+#! @brief Attach to the crypto. library. Called after ICC_Init.;
+#! @param status pointer to a pre-allocated ICC_STATUS variable in which status will be returned;
+#! @return 1 O.K. 0 Fail (library validation/Algorithm Self test fails);
+#! -1 if an error occurred which prevented this from suceeding i.e. failed memory allocation etc;
+#! @note This call should return ICC style status, but for historical reasons;
+#! i.e. most of the failures came up from OpenSSL it returns OpenSSL style status.;
+#! It's too late to fix this now.;
+#! We recommend checking the major return code in ICC_STATUS instead. See \ref ICC_STATUS_t;
+#! for the basic errors, and status->mode \ref ICC_FLAGS_ENUM for FIPS related status;
+
+0bP  int Attach(ICC_STATUS* status);
+
+#;
+#! @brief Internal entry point for ICC_Attach to the crypto. libraries. Called after ICC_Init.;
+#! @param status pointer to a pre-allocated ICC_STATUS variable in which status will be returned;
+#! @return 1 O.K. 0 Fail (library validation/Algorithm Self test fails);
+#! -1 if an error occurred which prevented this from suceeding i.e. failed memory allocation etc;
+#! @note This call should return ICC style status, but for historical reasons;
+#! i.e. most of the failures came up from OpenSSL it returns OpenSSL style status.;
+#! It's too late to fix this now.;
+#! We recommend checking the major return code in ICC_STATUS instead. See \ref ICC_STATUS_t;
+#! for the basic errors, and status->mode \ref ICC_FLAGS_ENUM for FIPS related status;
+
+0acdEP   int lib_attach(ICC_STATUS* status);
+
+
+
+#;
+#! @brief Cleanup a context created by ICC_Init.;
+#! @param status pointer to a pre-allocated ICC_STATUS variable in which status will be returned;
+#! @return ICC_OSSL_SUCCESS on success,ICC_ERROR if the context isn't valid, ICC_FAILURE otherwise;
+#! @note in the event that the ICC API is locked out by a FIPS error ;
+#! this function will return ICC_FAILURE due to errors propagated up ;
+#! from calls into the shared libraries - all cleanup that it was ;
+#! possible to perform has been done but ICC is still in an error state;
+
+0bP      int Cleanup(ICC_STATUS* status);
+
+#;
+#! @brief Internal call. Cleanup an internal library context created by ICC_Init.;
+#! @param status pointer to a pre-allocated ICC_STATUS variable in which status will be returned;
+#! @return ICC_OK, ICC_WARNING, ICC_ERROR;
+
+0acdP     int lib_cleanup(ICC_STATUS* status);
+
+#;
+#! @brief Run ICC 'FIPS algorithm self test' code;
+#! @param status pointer to a pre-allocated ICC_STATUS variable in which status will be returned;
+#! @return ICC_OSSL_SUCCESS on success, ICC_OSSL_FAILURE on failure;
+#! @note This function is run automatically at startup ;
+#! - This will return an error and disable most functions of FIPS mode ICC ;
+#! contexts if an error occurs;
+#! - The effects of this failing are global. i.e. ALL ICC FIPS contexts active will ;
+#! be disabled if any error occurs in any test ;
+#! - We recommend not running this when multiple threads using ICC are ;
+#! active. i.e. The function may be thread safe, but the side effects of failure aren't;
+
+0abcdP    int SelfTest(ICC_STATUS* status);
+
+
+#;
+#! @brief convert the NID n to an ASN1_OBJECT structure;
+#!        its long name and its short name respectively;
+#!         or NULL if an error occurred;
+#! @param nid (numeric ID);
+#! @return pointer to an ASN.1 encoded buffer or NULL on failure;
+#! @note the CONST char *, the returned value points to an internal ;
+#! static table - do not free it. ;
+
+0abcd   const char * OBJ_nid2sn(int nid);
+
+#;
+#! @brief  return an EVP_CIPHER structure when passed a cipher name;
+#! @param name Typically a cipher name i.e. AES-128-CBC.;
+#! @return pointer to a const EVP_CIPHER structure or NULL on failure (invalid name etc);
+#!         note these are truly const and should never be free'd;
+#! - See \ref subsec_alginit_cipher ;
+
+0abcdECMP  const EVP_CIPHER *      EVP_get_cipherbyname(const char *name);
+
+#;
+#! @brief  return an EVP_MD structure when passed a digest name;
+#! @param name Typically a digest name i.e. MD5. ;
+#! @return pointer to a const EVP_MD structure or NULL on failure (invalid name etc);
+#!         note these are truly const and should never be free'd;
+#! - See \ref subsec_alginit_digest ;
+
+0abcdECMP  const EVP_MD *          EVP_get_digestbyname(const char *name);
+#;
+
+#! @brief  return an uninitialized EVP_MD_CTX structure;
+#! @return pointer to a newly allocated EVP_MD structure or NULL on failure;
+
+0abcdEF     EVP_MD_CTX *            EVP_MD_CTX_new(void);
+
+#;
+#! @brief  free an EVP_MD_CTX structure;
+#! @param  x pointer to the EVP_MD_CTX to free;
+#! @return ICC_OSSL_SUCCESS, ICC_OSSL_FAILURE;
+
+0abcdFM     int  EVP_MD_CTX_free(EVP_MD_CTX *x);
+
+#;
+#! @brief  copy an EVP_MD_CTX structure;
+#! @param  out pointer to a pre-allocated destination EVP_MD_CTX;
+#! @param  in pointer to source EVP_MD_CTX;
+#! @return ICC_OSSL_SUCCESS, ICC_OSSL_FAILURE;
+
+0abcd   int  EVP_MD_CTX_copy(EVP_MD_CTX *out,const EVP_MD_CTX *in);
+
+#;
+#! @brief Initialize an EVP_MD_CTX structure;
+#! @param ctx pointer to the EVP_MD_CTX to initialize;
+
+0abcd   void EVP_MD_CTX_init(EVP_MD_CTX *ctx);
+
+#;
+#! @brief Cleanup an EVP_MD_CTX structure (possibly for reuse_;
+#! @param ctx pointer to the EVP_MD_CTX to Cleanup;
+#! @return ICC_OSSL_SUCCESS;
+
+0abcdF   int EVP_MD_CTX_cleanup(EVP_MD_CTX *ctx);
+
+#;
+#! @brief return the NID of the OBJECT IDENTIFIER representing the given message digest when passed an EVP_MD structure. ;
+#! @param e pointer to the EVP_MD;
+#! @return NID;
+
+0abcd     int EVP_MD_type(const EVP_MD *e);
+
+#;
+#! @brief return the size of the given message digest when passed an EVP_MD structure. ;
+#! @param e pointer to the EVP_MD;
+#! @return size;
+#! @note the return value returns the value embedded in the ;
+#! opaque EVP_MD structure without any error checking;
+
+0abcd     int EVP_MD_size(const EVP_MD *e);
+
+#;
+#! @brief return the block size of the given message digest when passed an EVP_MD structure. ;
+#! @param e pointer to the EVP_MD;
+#! @return block size;
+#! @note the return value returns the value embedded in the ;
+#! opaque EVP_MD structure without any error checking;
+
+0abcd     int EVP_MD_block_size(const EVP_MD *e);
+
+#;
+#! @brief returns the EVP_MD structure corresponding to the passed EVP_MD_CTX.;
+#! @param e pointer to the EVP_MD_CTX;
+#! @return const EVP_MD * ;
+#! @note the return value returns the value embedded in the ;
+#! opaque EVP_MD structure without any error checking;
+
+0abcd     const EVP_MD * EVP_MD_CTX_md(EVP_MD_CTX *e);
+
+#;
+#! @brief sets up digest context ctx to use the specified digest type;
+#! @param ctx pointer to the EVP_MD_CTX;
+#! @param type pointer to an EVP_MD;
+#! @return ICC_OSSL_SUCCESS, ICC_OSSL_FAILURE;
+
+0abcdEFM  int  EVP_DigestInit(EVP_MD_CTX *ctx, const EVP_MD *type);
+
+#;
+#! @brief This function hashes the input data and maintains its ongoing state of hashed data.; 
+#!         This function can be called several times on the same context to hash additional data. ;
+#! @param ctx pointer to the EVP_MD_CTX;
+#! @param d pointer to the data to hash;
+#! @param cnt number of bytes to hash;
+#! @return ICC_OSSL_SUCCESS, ICC_OSSL_FAILURE;
+
+0abcdEF  int  EVP_DigestUpdate(EVP_MD_CTX *ctx,const void *d,unsigned int cnt);
+
+#;
+#! @brief retrieves the digest value and returns it to the requesting application.;
+#!        After calling ICC_EVP_DigestFinal no additional calls to;
+#!        ICC_EVP_DigestUpdate can be made,; 
+#!        but ICC_EVP_DigestInit can be called to initialize a new digest operation.;
+#! @param ctx pointer to the EVP_MD_CTX;
+#! @param md pointer to buffer which will contain the hash;
+#! @param s pointer to an integer to hold the size of the hash, this pointer ;
+#! may be NULL in which case md must point to a buffer large enough to hold the full ;
+#! hash result ;
+#! @return ICC_OSSL_SUCCESS, ICC_OSSL_FAILURE;
+
+0abcdEFM  int  EVP_DigestFinal(EVP_MD_CTX *ctx,unsigned char *md,unsigned int *s);
+
+#;
+#! @brief  return an uninitialized EVP_CIPHER_CTX structure;
+#! @return pointer to a newly allocated EVP_CIPHER_CTX structure or NULL on failure;
+
+0abcdEF     EVP_CIPHER_CTX * EVP_CIPHER_CTX_new(void);
+
+#;
+#! @brief  free an EVP_CIPHER_CTX structure;
+#! @param  x pointer to the EVP_CIPHER_CTX to free;
+#! @return ICC_OSSL_SUCCESS, ICC_OSSL_FAILURE;
+
+0abcdFM     int  EVP_CIPHER_CTX_free(EVP_CIPHER_CTX *x);
+
+#;
+#! @brief  initializes an EVP_CIPHER_CTX structure;
+#! @param  a a pointer to the EVP_CIPHER_CTX to initialize;
+
+0abcdF   void EVP_CIPHER_CTX_init(EVP_CIPHER_CTX *a);
+
+#;
+#! @brief Cleanup an EVP_CIPHER_CTX structure (possibly for reuse);
+#! @param a a pointer to the EVP_CIPHER_CTX to Cleanup;
+#! @return ICC_OSSL_SUCCESS;
+
+0abcdF   int  EVP_CIPHER_CTX_cleanup(EVP_CIPHER_CTX *a);
+
+#;
+#! @brief  sets the key length of the cipher ctx.;
+#!         If the cipher is a fixed length cipher then attempting to set the key;
+#!         length to any value other than the fixed value is an error.;
+#!         - Note RC2 uses EVP_CIPHER_CTX_ctrl instead;
+#!         - Callable only after EVP_EncryptInit / EVP_DecryptUpdate and ;
+#!           before the first EVP_EncryptUpdate / EVP_DecryptUpdate calls ;
+#! @param  x pointer to the EVP_CIPHER_CTX ;
+#! @param  keylen new key length;
+#! @return ICC_OSSL_SUCCESS, ICC_OSSL_FAILURE;
+
+0abcd   int  EVP_CIPHER_CTX_set_key_length(EVP_CIPHER_CTX *x, int keylen);
+
+#;
+#! @brief  enables or disables padding. By default;
+#!       encryption operations are padded using standard block padding and the;
+#!       padding is checked and removed when decrypting. If the pad parameter is;
+#!       zero then no padding is performed, the total amount of data encrypted;
+#!       or decrypted must then be a multiple of the block size or an error will;
+#!       occur.;
+#! @param  c pointer to the EVP_CIPHER_CTX ;
+#! @param  pad 0 for no padding, otherwise specify the padding type;
+#! @return ICC_OSSL_SUCCESS, ICC_OSSL_FAILURE;
+
+0abcdF   int  EVP_CIPHER_CTX_set_padding(EVP_CIPHER_CTX *c, int pad);
+
+#;
+#! @brief return the block size for the given cipher ;
+#! @param cipher the cipher;
+#! @return the block size of the cipher;
+#! @note the return value returns the value embedded in the ;
+#! opaque EVP_CIPHER structure without any error checking;
+#! - padding is optional but if padding is omitted ;
+#! input data must be multiples of the cipher block size ;
+#! - either mode is allowed in FIPS mode ;
+
+0abcdF int EVP_CIPHER_block_size(const EVP_CIPHER *cipher);
+
+#;
+#! @brief return the key length for the given cipher ;
+#! @param cipher the cipher;
+#! @return the key length of the cipher;
+#! @note the return value returns the value embedded in the ;
+#! opaque EVP_CIPHER structure without any error checking;
+
+0abcdF int EVP_CIPHER_key_length(const EVP_CIPHER *cipher);
+
+#;
+#! @brief return the iv length for the given cipher ;
+#! @param cipher the cipher;
+#! @return the iv length of the cipher;
+#! @note the return value returns the value embedded in the ;
+#! opaque EVP_CIPHER structure without any error checking;
+
+0abcd int EVP_CIPHER_iv_length(const EVP_CIPHER *cipher);
+
+
+#;
+#! @brief return the canonical NID for the given cipher ;
+#! @param cipher the cipher;
+#! @return the OID NID of the cipher;
+#! @note the NID returned may not necessarily be the one;
+#!       used to select the cipher in the first place as;
+#!       there are aliases and/or configuration data/flags ; 
+#!       which control the algorithm behaviour for some algorithms;
+
+0abcd int EVP_CIPHER_type(const EVP_CIPHER *cipher);
+
+
+#;
+#! @brief returns the EVP_CIPHER structure when passed an EVP_CIPHER_CTX structure.;
+#! @param e pointer to an EVP_CIPHER;
+#! @return pointer to the EVP_CIPHER or NULL on failure ;
+#! @note the return value returns the value embedded in the ;
+#! opaque EVP_CIPHER structure without any error checking;
+
+0abcd     const EVP_CIPHER * EVP_CIPHER_CTX_cipher(const EVP_CIPHER_CTX *e);
+
+#;
+#! @brief generates a random key.  The PRNG must be seeded prior;
+#!       to using this function.  If the PRNG could not generate a;
+#!       secure key, 0 is returned.;
+#!       This key is a valid -non-weak DES key ;
+#! @param ret pre-allocated storage to return the DES key in;
+#! @return ICC_OSSL_SUCCESS, ICC_OSSL_FAILURE;
+
+0acbdE    int  DES_random_key(DES_cblock *ret);
+
+#;
+#! @brief sets the parity of the passed key to odd.;
+#! @param key pointer to the DES key;
+
+0abcd     void DES_set_odd_parity(void *key);
+
+#;
+#! @brief sets up cipher context ctx for encryption;
+#! @param ctx the cipher context to use;
+#! @param type the cipher to use;
+#! @param key the key to use;
+#! @param iv the iv to use.;
+#! @return ICC_OSSL_SUCCESS, ICC_OSSL_FAILURE;
+
+0abcdEFM  int EVP_EncryptInit(EVP_CIPHER_CTX *ctx,const EVP_CIPHER *type,unsigned char *key, unsigned char *iv);
+
+
+#;
+#! @brief encrypts inl bytes from the buffer in and writes;
+#!       the encrypted version to out. This function can be called multiple;
+#!       times to encrypt successive blocks of data. The amount of data written;
+#!       depends on the block alignment of the encrypted data: as a result the;
+#!       amount of data written may be anything from zero bytes to ;
+#!       (inl + cipher_block_size - 1) so outl should contain sufficient room.;
+#!       The actual number of bytes written is placed in outl.;
+#! @param ctx pointer to the EVP_CIPHER_CTX;
+#! @param out the output data buffer;
+#! @param outl a pointer to a place to store the count of encrypted bytes;
+#! @param in the input data buffer;
+#! @param inl the length (bytes) of the input data;
+#! @return ICC_OSSL_SUCCESS, ICC_OSSL_FAILURE;
+
+0abcdEF  int EVP_EncryptUpdate(EVP_CIPHER_CTX *ctx, unsigned char *out,int *outl, unsigned char *in, int inl);
+
+#;
+#! @brief encrypts the 'final' data.;
+#!        If padding is disabled and any data remains in a partial block an error is returned.;  
+#!   If padding has been set, any partial data will be encrypted and returned in the buffer provided.;
+#!        After this function is called the encryption operation is finished;
+#!        and no further calls to EVP_EncryptUpdate should be made.;
+#! @param ctx pointer to the EVP_CIPHER_CTX;
+#! @param out pointer to a buffer which must be large enough to hold any padded and encrypted data;
+#! @param outl pointer to an integer in which the length of any residual;
+#!        encrypted data will be returned.; 
+#! @return ICC_OSSL_SUCCESS, ICC_OSSL_FAILURE;
+
+0abcdEF  int EVP_EncryptFinal(EVP_CIPHER_CTX *ctx, unsigned char *out, int *outl);
+
+#;
+#! @brief sets up cipher context ctx for decryption;
+#! @param ctx the cipher context to use;
+#! @param type the cipher to use;
+#! @param key the key to use;
+#! @param iv the iv to use.;
+#! @return 1 on success, 0 on failure;
+
+0abcdEM  int EVP_DecryptInit(EVP_CIPHER_CTX *ctx,const EVP_CIPHER *type,unsigned char *key, unsigned char *iv);
+
+#;
+#! @brief decrypts inl bytes from the buffer in and writes;
+#!       the decrypted version to out. This function can be called multiple;
+#!       times to decrypt successive blocks of data. The amount of data written;
+#!       depends on the block alignment of the decrypted data: as a result the;
+#!       amount of data written may be anything from zero bytes to;
+#!       (inl + cipher_block_size - 1) so outl should contain sufficient room. ;
+#!       The actual number of bytes written is placed in outl.;
+#! @param ctx pointer to the EVP_CIPHER_CTX;
+#! @param out the output data buffer;
+#! @param outl a pointer to a place to store the count of decrypted bytes;
+#! @param in the input data buffer;
+#! @param inl the length (bytes) of the input data;
+#! @return ICC_OSSL_SUCCESS, ICC_OSSL_FAILURE;
+
+0abcdE  int EVP_DecryptUpdate(EVP_CIPHER_CTX *ctx, unsigned char *out,int *outl, unsigned char *in, int inl);
+
+#;
+#! @brief decrypts the 'final' data.;
+#!        If padding is disabled and any data remains in a partial block an error is returned.;  
+#!   If padding has been set, any partial data will be decrypted and returned in the buffer provided.;
+#!        After this function is called the decryption operation is finished;
+#!        and no further calls to EVP_DecryptUpdate should be made.;
+#! @param ctx pointer to the EVP_CIPHER_CTX;
+#! @param out pointer to a buffer which must be large enough to hold any decrypted data;
+#! @param outl pointer to an integer in which the length of any residual decrypted data will be returned.; 
+#! @return ICC_OSSL_SUCCESS, ICC_OSSL_FAILURE;
+
+0abcdE  int EVP_DecryptFinal(EVP_CIPHER_CTX *ctx, unsigned char *out, int *outl);
+
+#;
+#! @brief initializes a cipher context ctx for decryption with;
+#!       cipher type. It decrypts the encrypted symmetric key of length ekl;
+#!       bytes passed in the ek parameter using the private key priv.;  
+#! @param ctx pointer to the EVP_CIPHER_CTX;
+#! @param type cipher type;
+#! @param ek pointer to the symmetric encryption key to be encrypted with the private key;
+#! @param ekl length of the encryption key;
+#! @param iv pointer to the initial value;
+#! @param priv pointer to the private key in encapsulated EVP_PKEY format ;
+#! @return 0 on error the recovered secret key size (>0) if successful.;
+
+0abcd  int EVP_OpenInit(EVP_CIPHER_CTX *ctx,const EVP_CIPHER *type,unsigned char *ek,int ekl,unsigned char *iv,EVP_PKEY *priv);
+
+#;
+#! @brief Returns the decrypted symmetric key;
+#! @param ctx pointer to the EVP_CIPHER_CTX;
+#! @param out pointer to output buffer for the encrypted data;
+#! @param outl pointer to an integer in which to store the length of the;
+#!        decoded data ;
+#! @return ICC_OSSL_SUCCESS, ICC_OSSL_FAILURE;
+
+0abcdE  int EVP_OpenFinal(EVP_CIPHER_CTX *ctx, unsigned char *out, int *outl);
+
+#;
+#! @brief  initializes a cipher context ctx for encryption with;
+#!       cipher type using a random secret key and IV. type is normally supplied;
+#!       by a function such as EVP_des_cbc. The secret key is encrypted using;
+#!       one or more public keys, this allows the same encrypted data to be;
+#!       decrypted using any of the corresponding private keys.;
+#! @param ctx pointer to the EVP_CIPHER_CTX;
+#! @param type cipher type;
+#! @param  ek is an array of buffers where the public key encrypted secret key will be written,;
+#!       each buffer must contain enough room for the corresponding encrypted;
+#!       key: that is ek[i] must have room for EVP_PKEY_size bytes. ;
+#! @param ekl The actual size of each encrypted secret key is written to the array ekl.;
+#!        pubk is an array of npubk public keys.;
+#! @param iv pointer to the initial value;
+#! @param pubk pointer to an array of public keys key in encapsulated EVP_PKEY format ;
+#! @param npubk the number of publick keys in the pubk array;
+#! @return 0 on error, or npubk (number of public keys) on success;
+
+0abcd  int  EVP_SealInit(EVP_CIPHER_CTX *ctx,const EVP_CIPHER *type, unsigned char **ek,int *ekl, unsigned char *iv,EVP_PKEY **pubk, int npubk);
+
+#;
+#! @brief encrypts the 'final' data.;
+#! @param ctx pointer to the EVP_CIPHER_CTX;
+#! @param out pointer to a buffer which must be large enough to hold any padded and encrypted data;
+#! @param outl pointer to an integer in which the length of any residual;
+#!        encrypted data will be returned.; 
+#! @return ICC_OSSL_SUCCESS, ICC_OSSL_FAILURE;
+
+0abcdE  int   EVP_SealFinal(EVP_CIPHER_CTX *ctx,unsigned char *out,int *outl);
+
+#;
+#! @brief  signs the data in ctx using the private key pkey and;
+#!       places the signature in sig. If the s parameter is not NULL then the;
+#!       number of bytes of data written (i.e. the length of the signature) will;
+#!       be written to the integer at s, at most EVP_PKEY_size bytes will;
+#!       be written.;
+#! @param ctx ctx pointer to the EVP_CIPHER_CTX;
+#! @param md pointer to the data to be signed. (Typically a message digest);
+#! @param s NULL, or a pointer to the place to save the length of the signature;
+#! @param pkey pointer to the private key in encapsulated EVP_PKEY format ;
+#! @return ICC_OSSL_SUCCESS, ICC_OSSL_FAILURE;
+
+0abcdE  int   EVP_SignFinal(EVP_MD_CTX *ctx,unsigned char *md,unsigned int *s,EVP_PKEY *pkey);
+
+#;
+#! @brief verifies the data in ctx using the public key pkey;
+#!       and against the siglen bytes at sigbuf.;
+#! @param ctx pointer to the EVP_CIPHER_CTX;
+#! @param sigbuf pointer to the buffer to be verified;
+#! @param siglen length of data to be verified;
+#! @param pkey pointer to the public key in encapsulated EVP_PKEY format ;
+#! @return  ICC_OSSL_SUCCESS, ICC_OSSL_FAILURE, ICC_OSSL_FAILURE_TOO;
+
+0abcdE  int   EVP_VerifyFinal(EVP_MD_CTX *ctx,unsigned char *sigbuf,unsigned int siglen,EVP_PKEY *pkey);
+
+#;
+#! @brief This function allocates an encode context (BASE64 encode).;
+#! @return a pointer to the newly allocated EVP_ENCODE_CTX, or NULL on failure;
+
+0abcdE     EVP_ENCODE_CTX *        EVP_ENCODE_CTX_new(void);
+
+#;
+#! @brief This function frees an encode context.;
+#! @param x pointer to the EVP_ENCODE_CTX;
+#! @return ICC_OSSL_SUCCESS, ICC_OSSL_FAILURE;
+
+0abcdM     int  EVP_ENCODE_CTX_free(EVP_ENCODE_CTX *x);
+
+#;
+#! @brief initializes an encode context for encoding data into 'base64' encoding.;
+#! @param ctx a pointer to an EVP_ENCODE_CTX;
+
+0abcd   void EVP_EncodeInit(EVP_ENCODE_CTX *ctx);
+
+#;
+#! @brief encodes the supplied data and puts it into the output buffer. ;
+#!        This function can be called multiple times to encode successive blocks of data. ;
+#!        The amount of data written will be in sixty-four byte blocks.;
+#! @param ctx pointer to the EVP_ENCODE_CTX;
+#! @param out pointer to the output buffer. Needs to be at least 3/2 times;
+#!        larger than the input;
+#! @param outl pointer to a place to store the output length;
+#! @param in pointer to the input buffer;
+#! @param inl length of input data;
+
+0abcd   void EVP_EncodeUpdate(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl, unsigned char *in,int inl);
+
+#;
+#! @brief encodes the 'final' data. ; 
+#!        This is any data that remains in a partial block. ;
+#!        After this function is called the encoding operation is finished ;
+#!         no further calls to ICC_EVP_EncodeUpdate should be made.;
+#! @param ctx pointer to the EVP_ENCODE_CTX;  
+#! @param out pointer to the output buffer. Needs to be at least 3/2 times;
+#!        larger than the input;
+#! @param outl pointer to a place to store the output length;
+
+0abcd   void EVP_EncodeFinal(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl);
+
+#;
+#! @brief initializes a decode context for decoding data into 'base64' encoding.;
+#! @param ctx a pointer to an EVP_ENCODE_CTX;
+
+0abcd   void EVP_DecodeInit(EVP_ENCODE_CTX *ctx);
+
+#;
+#! @brief decodes the supplied base64 data and puts it into the output buffer. ;
+#!        This function can be called multiple times to encode successive blocks of data. ;
+#!        The amount of data written will be in forty-eight byte blocks.;
+#! @param ctx pointer to the EVP_ENCODE_CTX;
+#! @param out pointer to the output buffer.;
+#! @param outl pointer to a place to store the output length;
+#! @param in pointer to the input buffer;
+#! @param inl length of input data;
+#! @return -1  - An error in processing the data.;
+#!               A line in the encoded data is greater than 80 bytes;
+#!               An invalid 'base64' character was encountered.;
+#!          0  - The operation was successful and the end of the encoding was reached  No more data is expected.;
+#!          1  - Successful.;
+
+
+0abcd   int  EVP_DecodeUpdate(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl, unsigned char *in, int inl);
+
+#;
+#! @brief decodes the 'final' data.  This is any data that remains in a partial block.; 
+#!        After this function is called the decoding operation is finished ;
+#!        and no further calls to ICC_EVP_DecodeUpdate should be made.;
+#! @param ctx pointer to the EVP_ENCODE_CTX;
+#! @param out pointer to the output buffer.;
+#! @param outl pointer to a place to store the output length;
+#! @return The status of the operation.;  
+#!          -1 - An error in processing the data.;
+#!               A line in the encoded data is greater than 80 bytes;
+#!               An invalid 'base64' character was encountered.;
+#!           1 - Successful.;
+    
+0abcd   int  EVP_DecodeFinal(EVP_ENCODE_CTX *ctx, unsigned char *out, int *outl);
+
+
+#; 
+#! @brief generate random bytes of data.; 
+#!        In ICC the data will come from the FIPS approved pseudo random generator;
+#!        which has been seeded from a FIPS approved 'true' random number source.;
+#! @param buf The buffer in which to return the random bytes;
+#! @param num the number of bytes of data to return;
+#! @return 1 on sucess, 0 on failure or ICC_OSSL_FAILURE_TOO if no PRNG was available;
+#! @note This differs from older ICC up to ICC 1.5.x which returned the number of bytes generated.;
+#!  The previous return codes did not match OpenSSL's documented return codes or current OpenSSL behaviour.; 
+
+0abcdME  int  RAND_bytes(unsigned char *buf,int num);
+
+#;
+#! @brief Adds seeding data to the PRNG;
+#! - ICC always seeds it's internal PRNG at startup ;
+#! and reseeds at intervals specified by SP800-90;
+#! - You may use this in FIPS mode, but it's unnecessary in current ICC;  
+#! - This function is retained for compatability reasons ;
+#! @param buf pointer to the seed data;
+#! @param num number of seed bytes;
+#! @note  If there is no entropy available, a call to this interface may never return.;
+#!        This is unlikely to be a real problem as ICC would hang at startup.;
+
+0abcd  void RAND_seed(const void *buf,int num);
+
+#;
+#! @brief Decrypt a symmetric key previous encrypted by an EVP_PKEY;
+#! @param dec_key a pointer to a place to store the decoded key;
+#! @param enc_key a pointer to the encrypted symmetric key;
+#! @param enc_key_len the length of the encrypted key;
+#! @param private_key a pointer to the EVP_PKEY containing the private key to use for decryption;
+#! @return ICC_OSSL_FAILURE or the size of the decrypted key in bytes on success;
+
+0abcdEM  int  EVP_PKEY_decrypt(unsigned char *dec_key,unsigned char *enc_key,int enc_key_len,EVP_PKEY *private_key);
+
+
+#;
+#! @brief Encrypt a symmetric key with an EVP_PKEY (generic asymmetric key);
+#! @param enc_key a pointer to a place to store the encrypted key;
+#! @param key a pointer to the symmetric key to encrypt ;
+#! @param key_len the length of the symmetric key;
+#! @param pub_key a pointer to the EVP_PKEY containing the public key to use for encryption;
+#! @return ICC_OSSL_FAILURE or the size of the encrypted and padded key on success;
+
+0abcdEM  int EVP_PKEY_encrypt(unsigned char *enc_key,unsigned char *key,int key_len,EVP_PKEY *pub_key);
+
+#;
+#! @brief return the size of the key in bits ( for RSA the size of the public key modulus)  ;
+#! @param pkey pointer to the EVP_PKEY structure to size;
+#! @return size of the pkey in bits;
+
+0abcd   int  EVP_PKEY_bits(EVP_PKEY *pkey);
+
+#;
+#! @brief return the maximum size of a generated signature in bytes;
+#! @param pkey pointer to the EVP_PKEY structure to size;
+#! @return size of the signature generated by this pkey ;
+
+0abcd   int  EVP_PKEY_size(EVP_PKEY *pkey);
+
+#;
+#! @brief allocate a new EVP_PKEY structure;
+#! @return a pointer to the newly allocated EVP_PKEY or NULL on error;
+
+0abcdE   EVP_PKEY *  EVP_PKEY_new(void);
+
+#;
+#! @brief free an EVP_PKEY structure;
+#! @param pkey a pointer to the EVP_PKEY;
+
+0abcd   void  EVP_PKEY_free(EVP_PKEY *pkey);
+
+#;
+#! @brief Set the key field in the generic key PKEY to the RSA key key;
+#! @param pkey pointer to EVP_PKEY, non-NULL;
+#! @param key pointer to the RSA key to encapsulate;
+#! @return  ICC_OSSL_SUCCESS, ICC_OSSL_FAILURE;
+
+0abcdE  int  EVP_PKEY_set1_RSA(EVP_PKEY *pkey,RSA *key);
+
+#;
+#! @brief return a copy of the RSA key embedded within the PKEY object;
+#! @param pkey pointer to EVP_PKEY, non-NULL;
+#! @return pointer to an RSA structure or NULL on failure;
+#! @note free the returned object with RSA_free ;
+
+0abcdE  RSA * EVP_PKEY_get1_RSA(EVP_PKEY *pkey);
+
+#;
+#! @brief DER decode PKCS#1 data into an EVP_PKEY private key. ;
+#! Expects binary asn.1., you may need to BASE64 first;
+#! @param type type of the encapsulated key  EVP_PKEY_RSA EVP_PKEY_DSA etc;
+#! @param a pointer to a pointer to an EVP_PKEY private key;
+#! @param pp a pointer to a pointer to the DER encoded data.;
+#!        This value is updated to point one byte past the end of the input;
+#! @param length length of the input data;
+#! @return a pointer to an EVP_PKEY when it is successful or NULL on failure; 
+#! @note - Use EVP_PKEY_free to free the returned object ;
+
+0abcdE  EVP_PKEY *  d2i_PrivateKey(int type,EVP_PKEY **a, unsigned char **pp,long length);
+
+#;
+#! @brief DER decode PKCS#1 data into an EVP_PKEY public key.;
+#! Expects binary asn.1., you may need to BASE64 first;
+#! @param type type of the encapsulated key EVP_PKEY_RSA EVP_PKEY_DSA etc;
+#! @param a pointer to an EVP_PKEY public key;
+#! @param pp a pointer to a pointer to the DER encoded data.;
+#!        This value is updated to point one byte past the end of the input;
+#! @param length length of the input data;
+#! @return a pointer to an EVP_PKEY when it is successful or NULL on failure; 
+#! @note Use EVP_PKEY_free to free the returned object ;
+#! @note d2i_PUBKEY is the more standard form and should be used instead ;
+
+0abcdE  EVP_PKEY *  d2i_PublicKey(int type,EVP_PKEY **a,unsigned char **pp,long length);
+
+#;
+#! @brief allocates and initializes an ICC_RSA structure.  When done with the key call ICC_RSA_free.;
+#! @return a pointer to the newly allocated RSA structure or NULL on failure;
+#! @note In FIPS mode the RSA context will be initialized to use X9.31 RSA ;
+#! key generation ;
+
+0abcdEPM  RSA *  RSA_new(void);
+
+
+#;
+#! @brief generates a key pair and returns it in a newly allocated ICC_RSA structure.;
+#!  The pseudo-random number generator must be seeded prior to calling this function;  
+#!  When done with the key call ICC_RSA_free.;
+#!  This function may go into an infinite loop for illegal input values.;
+#! @param bits length of the key (modulus)in bits;
+#! @param e the public exponent. ;
+#!          Keys with exponent of less than 1024 should be considered insecure. ;
+#!          The exponent is an odd number, typically 3, 17 or 65537.;
+#! @param callback Feedback for a progress indicator. See the OpenSSL docs. Typically, set this to NULL.;  
+#! @param cb_arg Information to be passed to the callback method when it is called. Typically, set this to NULL;
+#! @return an pointer to a newly allocated RSA structure containing both the public and private RSA keys or NULL on failure;
+#! @note The callback and cb_arg parameters should be set to NULL in IBM applications. ;
+#! While in theory these paramaters could be used we can envisage no IBM application scenario ;
+#! where it would be useful to set these to non-NULL values ;
+
+0abcdEPMC  RSA *  RSA_generate_key(int bits, unsigned long e,void (*callback)(int,int,void *),void *cb_arg);
+
+#;
+#! @brief makes various checks on the key.  The checks include the following:
+#!        - Parameters of the key are not set.;
+#!        - The parameter 'p' is prime.;
+#!        - The parameter 'q' is prime.;
+#!        - The parameter 'n' is equal to the product of the parameters 'p' and 'q'.;
+#!        - The parameters 'p'-1 and 'q' minus 1 are relatively prime.;
+#! @param r a pointer to the RSA key to check;
+#! @return ICC_OSSL_SUCCESS, ICC_OSSL_FAILURE, ICC_OSSL_FAILURE_TOO;
+
+0abcdE  int  RSA_check_key(RSA *r);
+
+#;
+#! @brief Erases and frees an ICC_RSA structure. ;
+#! @param r a pointer to the RSA structure;
+
+0abcd   void RSA_free (RSA *r);
+
+#;
+#! @brief signs the flen bytes at from (usually a message;
+#!       digest with an algorithm identifier) using the private key rsa and ;
+#!       stores the signature in to. to must point to RSA_size bytes of ;
+#!       memory.;
+#! @param flen length of data to encrypt;
+#! @param from a pointer to the data to encrypt;
+#! @param to a pointer to buffer to store the encrypted data ;
+#! @param rsa a pointer to the RSA structure containing the private key;
+#! @param padding RSA_PKCS1_PADDING, RSA_PKCS1_OAEP_PADDING, RSA_SSLV23_PADDING , RSA_X931_PADDING or  RSA_NO_PADDING;
+#! @return ICC_OSSL_FAILURE on failure, the size of the padded and encrypted data in bytes on success;
+
+0abcdEMP  int  RSA_private_encrypt(int flen, const unsigned char *from,unsigned char *to, RSA *rsa,int padding);
+
+#;
+#! @brief  recovers the message digest from the 'flen' bytes long signature ;
+#!       at 'from' using the signer's public key rsa. 'to' must point;
+#!       to a memory section large enough to hold the message digest (which is;
+#!       smaller than RSA_size - 11.;
+#! @param flen length of data to decrypt;
+#! @param from a pointer to the data to decrypt;
+#! @param to a pointer to buffer to store the decrypted data ;
+#! @param rsa a pointer to the RSA structure containing the private key;
+#! @param padding the padding mode that was used to sign the data (RSA_PKCS1_PADDING, RSA_PKCS1_OAEP_PADDING, RSA_SSLV23_PADDING , RSA_X931_PADDING or  RSA_NO_PADDING);
+#! @return ICC_OSSL_FAILURE on failure, the size of the decrypted data in bytes on success;
+
+0abcdEMP  int  RSA_private_decrypt(int flen, unsigned char *from,unsigned char *to, RSA *rsa,int padding);
+
+#;
+#! @brief  encrypts the flen bytes at from (usually a session;
+#!       key) using the public key rsa and stores the ciphertext in to. to must;
+#!       point to RSA_size bytes of memory.;
+#! @param flen length of data to encrypt;  
+#!       flen must be less than RSA_size - 11 for the PKCS #1 v1.5 based;
+#!       padding modes, and less than RSA_size - 41 for;
+#!       RSA_PKCS1_OAEP_PADDING.;
+#! @param from a pointer to the data to encrypt;
+#! @param to a pointer to buffer to store the encrypted data ;
+#! @param rsa a pointer to the RSA structure containing the private key;
+#! @param padding RSA_PKCS1_PADDING, RSA_PKCS1_OAEP_PADDING, RSA_SSLV23_PADDING , RSA_X931_PADDING or  RSA_NO_PADDING;
+#! @return ICC_OSSL_FAILURE on failure, the size of the encrypted and padded data in bytes on success;
+
+0abcdEMP  int  RSA_public_encrypt(int flen, unsigned char *from,unsigned char *to, RSA *rsa,int padding);
+
+#;
+#! @brief  decrypts the flen bytes at from using the private;
+#!       key rsa and stores the plaintext in to. to must point to a memory section ;
+#!       large enough to hold the decrypted data [which is smaller than RSA_size.];
+#! @param flen length of data to decrypt;
+#! @param from a pointer to the data to decrypt;
+#! @param to a pointer to buffer to store the decrypted data ;
+#! @param rsa a pointer to the RSA structure containing the private key;
+#! @param padding the padding mode that was used to encrypt the data (RSA_PKCS1_PADDING, RSA_PKCS1_OAEP_PADDING, RSA_SSLV23_PADDING , RSA_X931_PADDING or  RSA_NO_PADDING);
+#! @return ICC_OSSL_FAILURE on failure, the size of the decrypted data in bytes;
+
+0abcdEMP  int  RSA_public_decrypt(int flen, const unsigned char *from,unsigned char *to, RSA *rsa,int padding);
+
+#;
+#! @brief DER encode an RSA private key.'
+#! Generates binary asn.1., you may need to BASE64 after;
+#! @param a pointer to an RSA private key;
+#! @param pp a pointer to a buffer to place the DER encoded data; 
+#!  - if *pp is NULL then a buffer will be allocated internally ;
+#!  - if pp is NULL then the length of the required buffer is returned ;
+#!  - The calling application should free internally allocated  memory using ;
+#!  free or an equivalent function.;
+#! @return  >0  The length of the DER encoding, otherwise an error occurred;
+#! @note    The DER encoded private key also contains a copy of the public key;
+
+0abcdE  int  i2d_RSAPrivateKey(RSA *a, unsigned char **pp);
+
+#;
+#! @brief DER encode an RSA public key;
+#! Generates binary asn.1., you may need to BASE64 after;
+#! @param a pointer to an RSA public key;
+#! @param pp A pointer to a buffer to hold the DER encoded data ;
+#! - if *pp is NULL then a buffer will be allocated internally ;
+#! - if  pp is NULL then the required buffer length will be returned;
+#! - The calling application should free internally allocated  memory using ;
+#! free or an equivalent function.;
+#! @return  >0 The length of the DER encoding, otherwise an error occurred;
+
+0abcdE  int  i2d_RSAPublicKey(RSA *a, unsigned char **pp);
+
+
+#;
+#! @brief returns the first error code from the thread's error queue and removes the entry. ;
+#! This function can be called repeatedly until there are no more error codes to return.;
+#! @return 0, there is no error code to be returned, >0 the OpenSSL error code.;
+
+0abcd   unsigned long ERR_get_error(void);
+
+#;
+#! @brief returns the first error code from the thread's error queue;
+#!        without removing the entry. ;
+#! @return 0, there is no error code to be returned, >0 the OpenSSL error code.;
+
+0abcd   unsigned long ERR_peek_error(void);
+
+#;
+#! @brief returns the latest error code from the thread's error queue;
+#!        without removing the entry. ;
+#! @return 0, there is no error code to be returned, >0 the OpenSSL error code.;
+
+0abcd   unsigned long ERR_peek_last_error(void);
+
+#;
+#! @brief This function generates a human-readable string representing the;
+#!        error code passed in.;
+#! Note that this text is not and currently cannot be internationalized. ;
+#! Applications using ICC are expected to be aware of this and perform ;
+#! their own message handling. ;
+#! The text cannot be i18n'd because it is literally generated, and ;
+#! English grammar is wired into the way the text is generated.;
+#! @param e an OpenSSL error code.;
+#! @param buf a buffer in which to return the error string. Note that the text;
+#!            length is not bounded.;
+
+0abcd   char *  ERR_error_string(unsigned long e,char *buf);
+#;
+#! @brief This function generates a human-readable string representing the;
+#!        error code passed in.;
+#! Note that this text is not and currently cannot be internationalized. ;
+#! Applications using ICC are expected to be aware of this and perform ;
+#! their own message handling. ;
+#! The text cannot be i18n'd because it is literally generated, and ;
+#! English grammar is wired into the way the text is generated.;
+#! @param e an OpenSSL error code.;
+#! @param buf a buffer in which to return the error string. ;
+#! @param len maximum length of text to return;
+
+0abcd   void    ERR_error_string_n(unsigned long e, char *buf, size_t len);
+
+#;
+#! @brief returns the library associated with the error condition.;
+#! @param e an OpenSSL error code.;
+#! @return NULL If no library is registered for the error code.;
+#! A pointer to ASCII text representing the library.;
+
+0abcd   const char * ERR_lib_error_string(unsigned long e);
+
+#;
+#! @brief returns the function associated with the error condition.;
+#! @param e an OpenSSL error code.;
+#! @return NULL If no function is registered for the error code.;
+#! A pointer to ASCII text representing the function.;
+
+0abcd   const char * ERR_func_error_string(unsigned long e);
+
+#;
+#! @brief returns the reason associated with the error condition.;
+#! @param e an OpenSSL error code.;
+#! @return NULL If no reason is registered for the error code.;
+#! A pointer to ASCII text representing the reason.;
+
+0abcd   const char * ERR_reason_error_string(unsigned long e);
+
+#;
+#! @brief empties the current thread's error queue.;
+
+0abcd   void  ERR_clear_error(void);
+
+#;
+#! @brief frees the error queue associated with the identified thread. ;
+#!  Since error queue data structures are allocated automatically for new threads, ;
+#! they must be freed when threads are terminated in order to avoid memory leaks.;
+#! @param pid Thread ID, if zero, the current thread's queue will be emptied.;
+
+0abcd   void  ERR_remove_state(unsigned long pid);
+
+
+#;
+#! @brief This function is used to generate a true random seed.  ;
+#! Once a seed is generated it can be used to seed the pseudo random number generator. ; 
+#! The function may be used to seed the pseudo random number generator is ICC_RAND_seed.;
+#! - This function is available, but the ICC PRNG is now always seeded on initialization;
+#!   and at intervals specified by NIST SP800-90 so it's use is unnecessary in FIPS mode ;
+#! - this is a CPU expensive operation. ;
+#! @param icc_stat a pointer to somewhere to store the status of the operation;
+#! @param seedLength the length of the seed to generate;
+#! @param seed a pointer to a buffer in which to place the generated seed.;
+
+0abcdPE   void  GenerateRandomSeed (ICC_STATUS *icc_stat, int seedLength, void* seed);
+
+#;
+#! @brief Set the key field in the generic key PKEY to the DH key key;
+#! @param pkey pointer to EVP_PKEY, non-NULL;
+#! @param key pointer to the DH key to encapsulate;
+#! @return ICC_OSSL_SUCCESS, ICC_OSSL_FAILURE;
+
+0abcdE  int  EVP_PKEY_set1_DH(EVP_PKEY *pkey, DH *key);
+#;
+#! @brief return a copy of the DH key embedded within the PKEY object;
+#! @param pkey pointer to EVP_PKEY, non-NULL;
+#! @return pointer to the new DH structure or NULL on failure;
+#! @note free the returned DH object with ICC_DH_free ;
+
+0abcdE  DH * EVP_PKEY_get1_DH(EVP_PKEY *pkey);
+
+#;
+#! @brief allocates and initializes a DH structure.;
+#! @return a pointer to a new DH structure, or NULL;
+
+0abcdE  DH * DH_new(void);
+
+#;
+#! @brief performs the first step of a Diffie-Hellman key;
+#!       exchange by generating private and public DH values. ;
+#!       By calling DH_compute_key, these are combined with ;
+#!       the other party's public value to compute the shared key.;
+#!       DH_generate_key expects dh to contain the shared parameters dh->p and;
+#!       dh->g. It generates a random private DH value unless dh->priv_key is;
+#!       already set, and computes the corresponding public value dh->pub_key,;
+#!       which can then be published.;
+#! @param dh a pointer to the DH structure to use;
+#! @return ICC_OSSL_SUCCESS, ICC_OSSL_FAILURE;
+
+0abcdEMP  int  DH_generate_key(DH *dh);
+
+#;
+#! @brief validates Diffie-Hellman parameters. It checks that p is a;
+#!       safe prime, and that g is a suitable generator. In the case of an error,; 
+#!       the bit flags DH_CHECK_P_NOT_SAFE_PRIME or DH_NOT_SUITABLE_GENERATOR ;
+#!       are set in *codes.  DH_UNABLE_TO_CHECK_GENERATOR is set if the;
+#!       generator cannot be checked, i.e. it does not equal 2 or 5.;
+#! @param dh a pointer to the DH structure to check;
+#! @param codes a pointer to an integer in which the status flags will be set;
+#! @return ICC_OSSL_SUCCESS, ICC_OSSL_FAILURE;
+
+0abcdE  int DH_check(const DH *dh, int *codes);
+
+#;  
+#! @brief frees the DH structure and its components. The values are;
+#!        erased before the memory is returned to the system.;
+#! @param dh a pointer to the DH structure to free;
+
+0abcd   void  DH_free (DH *dh);
+
+#;
+#! @brief  This function returns the Diffie-Hellman size in bytes. It can be used;
+#!       to determine how much memory must be allocated for the shared secret;
+#!       computed by DH_compute_key.;
+#! @param dh a pointer to the DH structure to size;
+#! @return The size in bytes;
+
+0abcdE  int  DH_size(const DH *dh);
+
+#;
+#! @brief computes the shared secret from the private DH value;
+#!       in dh and the other party's public value in pub_key and stores it in;
+#!       key. key must point to DH_size bytes of memory.;
+#! @param key pointer to a buffer to hold the generated shared secret;
+#! @param pub_key a pointer to the other parties public key;
+#! @param dh a pointer to the DH structure you wish to use;
+#! @return The size of the shared secret key on success, -1 on failure;
+
+0abcdEMP  int DH_compute_key(unsigned char *key,BIGNUM *pub_key,DH *dh);
+
+#;
+#! @brief  generates Diffie-Hellman parameters that can;
+#!       be shared among a group of users, and returns them in a newly allocated;
+#!       DH structure.;
+#! @param prime_len  is the length in bits of the safe prime to be generated.;
+#! @param generator is a small number > 1, typically 2 or 5.;
+#! @param callback Feedback for a progress indicator. See the OpenSSL docs. Typically, set this to NULL.;  
+#! @param cb_arg Information to be passed to the callback method when it is called. Typically, set this to NULL;
+#! While in theory these paramaters could be used we can envisage no ICC consumer scenario ;
+#! where it would be useful to set these to non-NULL values ;
+#! @return an pointer to a newly allocated DH structure containing both the public and private keys;
+
+0abcdECMP  DH * DH_generate_parameters(int prime_len,int generator, void (*callback)(int,int,void *),void *cb_arg);
+
+#;
+#! @brief extracts the public key from a DH structure;
+#! @param dh a pointer to the DH structure containing the public key;
+#! @return a pointer to the BIGNUM containing the public key within the DH;
+#! structure passed in;
+#! - Note: This routine DOES NOT ALLOCATE A NEW BIGNUM;
+
+0abcd     const BIGNUM * DH_get_PublicKey(const DH *dh);
+
+#;
+#! @brief DER decode PKCS#1 data into a DH structure. ;
+#! Expects binary asn.1, you may need to BASE64 decode first;
+#! @param a pointer to a pointer to a DH structure;
+#! @param a pointer to a pointer to a key.; 
+#!        If this is NULL a new DH structure will be allocated.;
+#! @param pp a pointer to a pointer to the DER encoded data.;
+#!        This value is updated to point one byte past the end of the input;
+#! @param length length of the buffer to process.;
+#! @return NULL - An error occurred. ;
+#!        a pointer to a DH structure when it is successful.; 
+#! @note Use ICC_DH_free to free the returned object ;
+
+0abcdE DH *  d2i_DHparams(DH **a,const unsigned char **pp, long length);
+
+#;
+#! @brief DER encode DH key negotiation parameters.;
+#! Generates binary asn.1, you may need to BASE64 Encode after;
+#! @param a a pointer to a DH structure;
+#! @param pp - **pp is not NULL and *pp is not NULL then that memory will be updated.; 
+#! - **pp is not NULL and *pp is NULL then memory is allocated and it will be updated with the DER encoding. ;
+#! - A NULL value of '**pp' will result in the required size being returned.;
+#! - The calling application should free internally allocated  memory using  ;
+#! free or an equivalent function.;
+#! @return  >0 - The length of the DER encoding, otherwise an error occurred;
+
+0abcdE int i2d_DHparams(const DH *a,unsigned char **pp);
+
+# DSA ;
+#;
+#! @brief Set the key field in the generic key PKEY to the DSA key key;
+#! @param pkey pointer to EVP_PKEY, non-NULL;
+#! @param key pointer to the DSA key to encapsulate;
+#! @return ICC_OSSL_SUCCESS, ICC_OSSL_FAILURE;
+
+0abcdE int EVP_PKEY_set1_DSA(EVP_PKEY *pkey, DSA *key);
+
+#;
+#! @brief  return a copy of the DSA key embedded within the PKEY object;
+#! @param pkey pointer to EVP_PKEY, non-NULL;
+#! @return pointer to the new DSA structure or NULL on failure;
+#! @note free the returned object with ICC_DSA_free ;
+
+0abcdE DSA * EVP_PKEY_get1_DSA(EVP_PKEY *pkey);
+
+#;
+#! @brief extract the DH data from inside a DSA structure;
+#! @param r pointer to a DSA structure;
+#! @return a pointer to an allocated DH structure containing the DH data inside;
+#! DSA object passed in or NULL on failure;
+#! @note free the returned object with ICC_DSA_free ;
+
+0abcdE DH * DSA_dup_DH(const DSA *r);
+
+#;
+#! @brief computes a digital signature on the len byte message digest;
+#!       dgst using the private key dsa and places its ASN.1 DER encoding at sigret.; 
+#!       The length of the signature is placed in *siglen.;
+#!       sigret must point to DSA_size bytes of memory.;
+#! @param type This parameter is ignored;
+#! @param dgst a pointer to the digest to sign;
+#! @param dlen the length of the digest;
+#! @param sig a pointer to the buffer in which the signature will be stored;
+#! @param siglen a pointer to a place in which to store the signature length;
+#! @param dsa a pointer to a DSA structure containing the signers private key;
+#! @return ICC_OSSL_SUCCESS, ICC_OSSL_FAILURE;
+
+0abcdE int DSA_sign(int type, const unsigned char *dgst, int dlen, unsigned char *sig, unsigned int *siglen, DSA *dsa);
+
+#;
+#! @brief verifies that the signature sigbuf of size siglen matches;
+#!       a given message digest dgst of size len.  dsa is the signer's public;
+#!         key.;
+#! @param type This parameter is ignored;
+#! @param dgst a pointer to the digest to verify;
+#! @param dgst_len the length of the digest;
+#! @param sigbuf a pointer to the buffer in which the signature is be stored;
+#! @param siglen the signature length;
+#! @param dsa a pointer to a DSA structure containing the signers public key;
+#! @return  ICC_OSSL_SUCCESS, ICC_OSSL_FAILURE, ICC_OSSL_FAILURE_TOO;
+
+0abcdE int DSA_verify(int type, const unsigned char *dgst, int dgst_len, const unsigned char *sigbuf, int siglen, DSA *dsa);
+
+#;
+#! @brief returns the size of an ASN.1 encoded DSA signature in;
+#!       bytes. It can be used to determine how much memory must be allocated;
+#!       for a DSA signature.;
+#! @param dsa a pointer to a DSA structure;
+#! @return the size in bytes;
+
+0abcdE int DSA_size(const DSA *dsa);
+
+#;
+#! @brief allocates and initializes a DSA structure.;
+#! @return a pointer to the new DSA structure or NULL on failure;
+
+0abcdE  DSA * DSA_new(void);
+
+#;
+#! @brief  frees the DSA structure and its components. The values are;
+#!         erased before the memory is returned to the system;
+#! @param  dsa a pointer to a DSA structure;
+
+0abcd   void DSA_free(DSA *dsa);
+
+#;
+#! @brief expects 'a' to contain DSA parameters. It generates a ;
+#!       new key pair and stores it in a->pub_key and a->priv_key.;
+#! @param a a pointer to a DSA structure already containing parameters;
+#! @return ICC_OSSL_SUCCESS, ICC_OSSL_FAILURE;
+
+0abcdEMP  int DSA_generate_key(DSA *a);
+
+#;
+#! @brief  generates primes p and q and a generator g for use in the DSA.;
+#! @param bits number of bits in the generated DSA function;
+#! @param seed If seed is NULL or seed_len < 20, the primes will be generated at random. ;
+#!        Otherwise, the seed is used to generate them. If the given seed;
+#!        does not yield a prime q, a new random seed is chosen and placed at seed.;
+#! @param seed_len length of the seed passed in;
+#! @param counter_ret the iteration count is placed in *counter_ret unless this is NULL;
+#! @param h_ret The counter used for finding a generator is placed in *h_ret unless this is NULL;
+#! @param callback Feedback for a progress indicator. See the OpenSSL docs. Typically, set this to NULL.;  
+#! @param cb_arg Information to be passed to the callback method when it is called. Typically, set this to NULL;
+#! While in theory these paramaters could be used we can envisage no ICC consumer scenario ;
+#! where it would be useful to set these to non-NULL values ;
+#! @return a pointer to a newly allocated DSA structure containing both the public and private keys or NULL on failure;
+
+0abcdECMP  DSA * DSA_generate_parameters(int bits,unsigned char *seed,int seed_len,int *counter_ret, unsigned long *h_ret,void (*callback)(int, int, void *),void *cb_arg);
+
+# DSA input/output ;
+#;
+#! @brief DER decode PKCS#1 parameter data into a DSA structure.; 
+#! Expects binary asn.1, you may need to BASE64 decode first;
+#! @param a pointer to a pointer to a DSA structure;
+#!        If this is NULL a new DSA structure will be allocated.;
+#! @param pp a pointer to a pointer to the DER encoded data.;
+#!        This value is updated to point one byte past the end of the input;
+#! @param length length of the buffer to process.;
+#! @return NULL - An error occurred. ;
+#!        a pointer to a DSA structure when it is successful.; 
+#! @note Use ICC_DSA_free to release the returned object ;
+
+0abcdE  DSA * d2i_DSAparams(DSA **a, const unsigned char **pp, long length);
+
+#;
+#! @brief DER encode DSA parameters.;
+#! Generates binary asn.1, you may need to BASE64 encode after;
+#! @param a pointer to a DSA structure;
+#! @param pp a pointer to a buffer in which to return DER encoded data ;
+#! - if *pp is NULL a buffer will be allocated internally;
+#! - if pp  is NULL the required size will be returned.;
+#! - The calling application should free internally allocated memory using ;
+#! free or an equivalent function.;
+#! @return >0 - The length of the DER encoding, otherwise an error occurred;
+
+0abcdE  int   i2d_DSAparams(const DSA *a, unsigned char **pp);
+
+#;
+#! @brief DER decode PKCS#1 Public key data into a DSA structure.;
+#! Expects binary asn.1, you may need to BASE64 decode first;
+#! @param a pointer to a pointer to a DSA structure;
+#! @param a pointer to a pointer to a key. ;
+#!        If this is NULL a new DSA structure will be allocated.;
+#! @param pp a pointer to a pointer to the DER encoded data.;
+#!        This value is updated to point one byte past the end of the input;
+#! @param length length of the buffer to process.;
+#! @return NULL - An error occurred. ;
+#!        a pointer to a DSA structure when it is successful.; 
+#! @note Use ICC_DSA_free to release the returned object ;
+
+0abcdE  DSA * d2i_DSAPublicKey(DSA **a, const unsigned char **pp, long length);
+
+#;
+#! @brief DER encode a DSA private key.;
+#! Generates binary asn.1, you may need to BASE64 encode after;
+#! @param a pointer to a DSA private key;
+#! @param pp a pointer to a buffer in which to return DER encoded data ;
+#! - if  *pp is NULL a buffer will be allocated internally ;
+#! - if pp is NULL the required buffer length will be returned ;
+#! - The calling application should free internally allocated  memory using  ;
+#! free or an equivalent function.;
+#! @return >0 - The length of the DER encoding, otherwise an error occurred;
+#! @note The DER encoded data also contains a copy of the public key;
+
+0abcdE  int  i2d_DSAPublicKey(const DSA *a, unsigned char **pp);
+
+#;
+#! @brief DER decode PKCS#1 Private key data into a DSA structure.;
+#! Expects binary asn.1, you may need to BASE64 decode first;
+#! @param a pointer to a pointer to a DSA structure;
+#! @param a pointer to a pointer to a key.;
+#!        If this is NULL a new DSA structure will be allocated.;
+#! @param pp a pointer to a pointer to the DER encoded data.;
+#!        This value is updated to point one byte past the end of the input;
+#! @param length length of the buffer to process.;
+#! @return NULL - An error occurred. ;
+#!         a pointer to a DSA structure when it is successful.; 
+#! @note Use ICC_DSA_free to release the returned object ;
+
+
+0abcdE  DSA * d2i_DSAPrivateKey(DSA **a, const unsigned char **pp, long length);
+
+#;
+#! @brief DER encode an DSA private key. ;
+#! Generates binary asn.1, you may need to BASE64 encode after;
+#! @param a pointer to a DSA private key;
+#! @param pp a pointer to a buffer in which to return DER encoded data ;
+#! - if  *pp is NULL a buffer will be allocated internally ;
+#! - if pp is NULL the required buffer length will be returned ;
+#! - The calling application should free internally allocated  memory using   ;
+#! free or an equivalent function.;
+#! @return >0 - The length of the DER encoding, otherwise an error occurred;
+#! @note The DER encoded data also contains a copy of the public key;
+
+0abcdE  int i2d_DSAPrivateKey(const DSA *a, unsigned char **pp);
+
+# Raw key access. Needed to get the public DH key into a transportable form;
+
+#;
+#! @brief  converts the absolute value of a into big-endian form and;
+#!       stores it at dest. dest must point to BN_num_bytes bytes of memory.;
+#! @param bn pointer to a BIGNUM;
+#! @param dest pointer to a buffer;
+#! @return number of bytes put into the output buffer;
+
+0abcdF  int  BN_bn2bin(const BIGNUM *bn,unsigned char *dest);
+
+#;
+#! @brief convert value of a big-endian byte stream in src ;
+#!        into a BIGNUM ;
+#! @param src pointer to source buffer with binary data;
+#! @param len length of input buffer;
+#! @param ret pointer to the BIGNUM to populate. ;
+#!         If ret is NULL, a new BIGNUM is created.;
+#! @return the BIGNUM pointer, NULL on error;
+#! @note free the returned object with ICC_BN_clear_free ;
+
+0abcdF  BIGNUM * BN_bin2bn(const unsigned char *src,int len, BIGNUM *ret);
+
+#;
+#! @brief Return the size in bits of a given BIGNUM;
+#! @param a pointer to the BIGNUM to size;
+#! @return size in bits of the BIGNUM;
+
+0abcdF  int BN_num_bits(const BIGNUM *a);
+
+#;
+#! @brief This is only here for completeness,;
+#!         there's no use for this function at present;
+#! @return pointer to a newly created, but empty, BIGNUM or NULL on error;
+
+0abcdE  BIGNUM * BN_new(void);
+
+#;
+#! @brief Erase, then free a BIGNUM returned by BN_bin2bn (or the otherwise useless BN_new);
+#! @param a pointer to the BIGNUM to free;
+
+0abcdF  void BN_clear_free(BIGNUM *a);
+
+#;
+#! @brief Turn of blinding for this RSA object;
+#!        This trades security for speed and should NEVER be done; 
+#!        without a clear understanding of the implications ;
+#!        Blinding is on by default, there is no API call to turn blinding back on;
+#! @param rsa a pointer to the RSA context for which blinding is to be disabled;
+#! @note not disallowed in FIPS mode, but as noted above, be very sure there ;
+#! are no security implications - blinding should never be turned off in network ;
+#! facing applications for example;
+ 
+0abcd void  RSA_blinding_off(RSA *rsa);
+
+# DB2, only way to set RC2 key length ;
+#;
+#! @brief allows various cipher specific parameters to be ;
+#!       determined and set. Currently only the RC2 effective key length and the;
+#!       number of rounds of RC5 can be set. ;
+#!       - EVP_CIPHER_CTX_ctrl[ctx, EVP_CTRL_GET_RC5_ROUNDS, 0, &nrounds];
+#!       - EVP_CIPHER_CTX_ctrl[ctx, EVP_CTRL_SET_RC5_ROUNDS, &nrounds, NULL];
+#!       - EVP_CIPHER_CTX_ctrl[ctx, EVP_CTRL_SET_RC2_KEY_BITS, key_bits, NULL];
+#!       - EVP_CIPHER_CTX_ctrl[ctx, EVP_CTRL_GET_RC2_KEY_BITS, 0, &key_bits];
+#!       - Callable only after EVP_EncryptInit / EVP_DecryptUpdate and ;
+#!         before the first EVP_EncryptUpdate / EVP_DecryptUpdate calls ;
+#! @param ctx pointer to an EVP_CIPHER_CTX;
+#! @param type Operation type EVP_CTRL_GET_RC5_ROUNDS, EVP_CTRL_SET_RC5_ROUNDS;
+#!             EVP_CTRL_GET_RC2_KEY_BITS EVP_CTRL_SET_RC2_KEY_BITS ;
+#! @param arg  input data;
+#! @param ptr  pointer to output data;
+#! @return ICC_OSSL_SUCCESS, ICC_OSSL_FAILURE;
+
+0abcd int EVP_CIPHER_CTX_ctrl(EVP_CIPHER_CTX *ctx, int type, int arg, void *ptr);
+
+#;
+#! @brief return the size of the modulus of an RSA key;
+#! @param rsa pointer to RSA structure;
+#! @return size of the RSA modulus;
+
+0abcd int RSA_size(RSA *rsa);
+
+#;
+#! @brief allocate BN_CTX structures;
+#!   A BN_CTX is a structure that holds BIGNUM temporary variables used by;
+#!   library functions. Since dynamic memory allocation to create BIGNUMs is;
+#!   rather expensive when used in conjunction with repeated subroutine;
+#!   calls, the BN_CTX structure is used.;
+#! @return a pointer to a newly allocated BN_CTX structure or NULL;
+
+0abcdEF BN_CTX *  BN_CTX_new(void);
+
+#;
+#! @brief frees the components of the BN_CTX, and if it was created;
+#!       by BN_CTX_new, also the structure itself.;
+#! @param bn_ctx a pointer to a BN_CTX created by a successful call to BN_CTX_new;
+
+0abcdF void BN_CTX_free(BN_CTX *bn_ctx);
+
+#;
+#! @brief computes a to the p-th power modulo m i.e. r=a^p % m.;
+#!        faster than using BN_exp to do the same thing;
+#! @param r result.  See brief description;
+#! @param a value.   See brief description;
+#! @param p power.   See brief description;
+#! @param m modulus. See Brief description;
+#! @param ctx The BIGNUM context - scratch storage - to use for this operation;
+#! @return ICC_OSSL_SUCCESS, ICC_OSSL_FAILURE;
+
+0abcdE int BN_mod_exp(BIGNUM *r, BIGNUM *a, BIGNUM *p, BIGNUM *m, BN_CTX *ctx);
+
+#;
+# Note: We use the same doc for the next two defines.;
+#! @brief  return an initialized EVP_HMAC_CTX structure;
+#! Note that in comparison to the OpenSSL API we malloc an HMAC_CTX;
+#! and call HMAC_CTX_init on it before returning.;
+#! @return pointer to a newly allocated EVP_HMAC_CTX structure or NULL on error;
+
+0abcdEF     HMAC_CTX * HMAC_CTX_new(void);
+
+#;
+#! @brief free an HMAC_CTX structure, note that this calls the OpenSSL HMAC_CTX_cleanup function internally;
+#! @param ctx the HMAC context to cleanup and free ;
+
+0abcdF    void  HMAC_CTX_free(HMAC_CTX *ctx);
+
+
+#;
+#! @brief initializes or reuses a HMAC_CTX structure to use the;
+#!       function evp_md and key key. Either can be NULL, in which case the;
+#!       existing one will be reused.; 
+#! @param ctx a previously created HMAC_CTX;
+#! @param key the key;
+#! @param key_len length of the key in bytes;
+#! @param md A pointer to the EVP_MD structure containing the hash information;
+#! @note  Quietly mapped to HMAC_Init_ex under the covers so keys/md's can ;
+#!        be reused with no leaks and correct operation. ;
+#!        - The HMAC context must have both the key and md set before;
+#!          HMAC_Update/HMAC_Update are called ;
+#!        - Once set md and or key can be NULL on subsequent calls to ;
+#!          HMAC_Init ;
+
+0abcdFM  int HMAC_Init(HMAC_CTX *ctx, const void *key, int key_len,const EVP_MD *md);
+
+#;
+#! @brief can be called repeatedly with chunks of the message to be  authenticated (len bytes at data).;
+#!       Note: Use of large blocks of data is recommended if efficiency is an issue.;
+#! @param ctx the HMAC context;
+#! @param data a pointer to the next data segment;
+#! @param len length of the data segment in bytes;
+
+0abcdF int HMAC_Update(HMAC_CTX *ctx, const unsigned char *data, int len);
+
+#;
+#! @brief places the message authentication code in md, which must;
+#!   have space for the hash function output.;
+#! @param ctx the HMAC context;
+#! @param md a pointer to a buffer to hold the message authentication code;
+#! @param len a pointer to an unsigned integer which will hold the length of the generated MAC ;
+#! @return 1 on sucess, 0 on failure ;
+
+0abcdF int HMAC_Final(HMAC_CTX *ctx, unsigned char *md, unsigned int *len);
+
+#;
+#! @brief Initializes a PRNG context;
+#! @param type of the context to be initialized, Valid values are not public;
+#! @param q  a buffer of SHA_DIGEST_LENGTH bytes containing a 160-bit;
+#!      prime (MSB first), necessary for all but DSS_3_2_SHAgp where it;
+#!      should be NULL.;
+#! @param seed valid pointer to buffer with random seed;
+#! @param seed_len  size in bytes of buffer seed. Must be between;
+#!      FIPS_DSS_PRNG_MIN_SEED_BYTES and FIPS_DSS_PRNG_MAX_SEED_BYTES;
+#!      bytes. Should contain at least 160 bits of entropy.;
+#! @param key A pointer to keying data appropriate to this algorithm;
+#!      If NULL (recommended), the NIST specified defaults are used;
+#!      Note: If key is provided, the internal continuous PRNG test is also skipped; 
+#! @return An initialized prng ctx pointer on success, NULL on failure;
+#! @note This is an internal API exposed only for testing.;
+#!      ICC consumers should not use this API, and it may be;
+#!      removed at any time.;
+
+0d   void * fips_dss_prng_ctx_new(const int type,const unsigned char *q, const unsigned char  *seed,const int seed_len, const unsigned char *key);
+
+#;
+#! @brief  Generate random bytes using PRNG;
+#! @param prng_ctx Initialized PRNG context to be used;
+#! @param buf  buf: valid pointer buffer to be filled with random bytes.;
+#!      Must be pre-allocated of minimal length num bytes;
+#! @param num number of desired random bytes;
+#! @return RAND_R_PRNG_OK on success, other values on failure;
+#! @note This is an internal API exposed only for testing.;
+#!      ICC consumers should not use this API, and it may be;
+#!      removed at any time.;
+
+0d  int fips_dss_prng_bytes(void * prng_ctx,unsigned char *buf,const int num);
+
+#;
+#! @brief Mix extra seeding data into the chosen PRNG;    
+#!      add_seed != NULL only allowed for DSS_3_2_SHA, DSS_3_2_SHArev, DSS_3_2_SHAgp;
+#! @param prng_ctx context of PRNG to be used; 
+#! @param add_seed  NULL or valid pointer to buffer with additional;
+#!      random seed;
+#! @param  add_seed_len size in bytes of buffer add_seed if non-NULL;
+#! @return RAND_R_PRNG_OK on success, other values on failure;
+#! @note - this function ignores all currently unconsumed bytes of the;
+#!      previous run of the PRGN transform, runs immediately the PRNG;
+#!      transform on the current state with the given seed as optional;
+#!      user input.  Therefore, in the case you have optional user input;
+#!      in the DSS key generation, you first run ``fips_dss_prng_add_seed'';
+#!      on the user input and then immediately ``fips_dss_prng_bytes'' to;
+#!      get the secret key.;
+#!    - the mix-in implicitly truncates ``add_seed'' to the size of the;
+#!      initial seed (seed/seed_len from corresponding;
+#!      ``fips_dss_prng_init_ctx'').  Therefore, it does not make much;
+#!      sense to pass  here buffers longer than given in the;
+#!      corresponding ``fips_dss_prng_init_ctx'' ...;
+
+0d  int fips_dss_prng_add_seed(void * prng_ctx,const unsigned char *add_seed,const int add_seed_len);
+
+#;
+#! @brief  delete all secret state related to this context and free memory;
+#! @param  prng_ctx pointer to initialized  context;
+#! @return RAND_R_PRNG_OK;
+#! @note This is an internal API exposed only for testing.;
+#!      ICC consumers should not use this API, and it may be;
+#!      removed at any time.;
+
+0d   int fips_dss_prng_ctx_free(void *prng_ctx);
+
+#;
+#! @brief divides a by d and places the result in dv and the remainder in rem;
+#!        dv=a/d, rem=a%d. Either of dv and rem may be NULL,;
+#!        in which case the respective value is not returned.  The result is;
+#!        rounded towards zero; thus if a is negative, the remainder will;
+#!        be zero or negative.;
+#! @param dv  result.       See brief description;
+#! @param rem remainder.    See brief description;
+#! @param a number.         See brief description;
+#! @param d divisor.        See Brief description;
+#! @param ctx The BIGNUM context - scratch storage - to use for this operation
+#! @return ICC_OSSL_SUCCESS, ICC_OSSL_FAILURE;
+
+0abcdEF int BN_div(BIGNUM *dv, BIGNUM *rem, const BIGNUM *a, const BIGNUM *d, BN_CTX *ctx);
+
+#;
+#! @brief decode a DSA public key from a SubjectPublicKeyInfo (certificate public key) structure;
+#! @param a pointer to a pointer to a DSA structure;
+#!        If this is NULL a new DSA structure will be allocated.;
+#! @param pp a pointer to a pointer to the DER encoded data.;
+#!        This value is updated to point one byte past the end of the input;
+#! @param length length of the buffer to process.;
+#! @return NULL - An error occurred. ;
+#!        a pointer to a DSA structure when it is successful.; 
+#! @note  This is the standard form of DSA public key used in certificates;
+#! - use ICC_DSA_free to release the returned object ;
+
+0abcd DSA * d2i_DSA_PUBKEY(DSA **a, const unsigned char **pp, long length);
+
+
+#;
+#! @brief DER encode a DSA public key into a SubjectPublicKeyInfo (certificate public key) structure;
+#! @param a pointer to a DSA public key;
+#! @param pp a pointer to a buffer in which to return DER encoded data ;
+#! - if  *pp is NULL a buffer will be allocated internally ;
+#! - if pp is NULL the required buffer length will be returned ;
+#! - The calling application should free internally allocated  memory using   ;
+#! free or an equivalent function.;
+#! @return >0 - The length of the DER encoding, otherwise an error occurred ; 
+#! @note  This is the standard form of DSA public key used in certificates;
+
+0abcdE  int  i2d_DSA_PUBKEY(const DSA *a, unsigned char **pp);
+
+#;
+
+#;
+#;  EC routines. This isn't a general purpose EC interface - there's ;
+#;  Enough EC API to use ECDH and ECDSA but that's about it ;
+#;
+#! @brief Allocate a new ECDSA_SIG structure;
+#! @return A pointer to a newly allocated ECDSA_SIG structure or NULL;
+
+1abcdE ECDSA_SIG* ECDSA_SIG_new(void);
+
+#;
+#! @brief Free a previously allocated ECDSA_SIG structure;
+#! @param sig the ECDSA_SIG structure to free;
+
+1abcd void ECDSA_SIG_free(ECDSA_SIG *sig);
+
+#;
+#! @brief Convert an ECDSA_SIG structure to DER encoding;
+#! @param sig the ECDSA_SIG structure to encode;
+#! @param pp a pointer to a buffer in which to write the signature;
+#! - *pp may be NULL in which case a buffer is allocated internally ;
+#! - pp may be NULL in which case only the length is calculated;
+#! - The calling application should free internally allocated  memory using;
+#! free or an equivalent function.;
+#! @return >0 The length of the DER encoded signature, otherwise an error occurred;
+
+1abcd int i2d_ECDSA_SIG(const ECDSA_SIG *sig, unsigned char **pp);
+
+#;
+#! @brief d2i_ECDSA_SIG decodes a DER encoded ECDSA signature and returns;
+#! the decoded signature in a newly allocated B<ECDSA_SIG> structure.;
+#! @param sig  *sig points to the buffer containing the DER encoded signature of size len.;
+#! @param pp a pointer to a pointer to the DER encoded data, the pointer is modified to point to after the DER data;
+#! @param len length of the DER encoded input buffer;
+#! @return A newly allocated and populated ECDSA_SIG structure or NULL on error;
+#! @note Use ICC_ECDSA_SIG_free to release the returned object ;
+
+1abcd ECDSA_SIG* d2i_ECDSA_SIG(ECDSA_SIG **sig, const unsigned char **pp,long len);
+
+#;
+#! @brief computes a digital signature of the dgst_len ;
+#! bytes hash value dgst using the private key eckey;
+#! The DER encoded signature is returned in the buffer pointed to by sig.;
+#! @param type ignored.;
+#! @param dgst the buffer to sign ;
+#! @param dgstlen the length of the buffer to sign;
+#! @param sig a pointer to the buffer in which to store the signature;
+#! @param siglen a pointer to a location in which to store the signature length;
+#! @param eckey the EC key to sign with;
+#! @return 1 if successful or -1 on error;
+
+1abcdE int ECDSA_sign(int type, const unsigned char *dgst,int dgstlen, unsigned char *sig,unsigned int *siglen, EC_KEY *eckey);
+
+#;
+#! @brief verifies that the signature in sig of size ;
+#! siglen is a valid ECDSA signature of the hash value ;
+#! value dgst of size  dgstlen using the public key  eckey.;
+#! Note that the input signature is expected to be in DER encoded form.;
+#! @param type is ignored.;
+#! @param dgst the buffer to verify ;
+#! @param dgstlen the length of the buffer to verify;
+#! @param sig a pointer to the buffer in which the signature is stored;
+#! @param siglen the signature length;
+#! @param eckey the EC key to verify with;
+#! @return  1 for a valid signature, 0 for an invalid signature and -1 on error.;
+
+1abcdE int ECDSA_verify(int type, const unsigned char *dgst,int dgstlen, const unsigned char *sig,int siglen, EC_KEY *eckey);
+
+#;
+#! @brief ECDSA_size returns the maximum length of a DER encoded;
+#! ECDSA signature created with the private EC key;
+#! @param eckey the EC key;
+#! @return the maximum length of the signature that will be generated or 0 on error;
+
+1acbcd int ECDSA_size(const EC_KEY *eckey);
+
+#;
+#! @brief set the key referenced by pkey to key;
+#! @param pkey a pointer to an EVP_PKEY structure ;
+#! @param key the EC_KEY to wrap within the PKEY interface;
+#! @return ICC_OSSL_SUCCESS, ICC_OSSL_FAILURE;
+#! @note In accordance with the OpenSSL naming convention the key obtained from ;
+#!       or assigned to the pkey using the 1 functions must be freed as well as ;
+#!       pkey. ;
+
+1abcd int EVP_PKEY_set1_EC_KEY(EVP_PKEY *pkey,EC_KEY *key);
+
+#;
+#! @brief return a copy of the EC key embedded within the PKEY object;
+#! @param pkey the EVP_PKEY to extract the referenced EC_KEY from;
+#! @return the referenced EC_KEY or NULL;
+#! @note free the returned object with ICC_EC_KEY_free ;
+
+1abcd EC_KEY *EVP_PKEY_get1_EC_KEY(EVP_PKEY *pkey);
+
+#;
+#! @brief create an EC_KEY from the curve specified by the nid (numeric ID);
+#! @param nid the numeric ID of the curve to use;
+#! @return an EC_KEY of the appropriate type, or NULL on error;
+#! @note - The function is misnamed, it takes a NID not text ;
+#!       - Use OBJ_txt2nid to convert EC curve names to NID's;
+#!       - Use EC_Key_free to release the object after use;
+
+1abcdECMP EC_KEY *EC_KEY_new_by_curve_name(int nid);
+#;
+
+#! @brief  return an uninitialized EC_KEY structure;
+#! @return pointer to a newly allocated EC_KEY structure or NULL on failure;
+
+1abcdE     EC_KEY * EC_KEY_new(void);
+#;
+
+#! @brief free a previously created EC_KEY structure;
+#! @param eckey a pointer to the EC_KEY to free; 
+
+1abcd void EC_KEY_free(EC_KEY * eckey);
+#;
+
+#! @brief generate an EC_KEY from the curve already setup;
+#! @param eckey the EC_KEY with a curve already established;
+#! @return 1 on sucess, 0 on failure;
+
+1abcdEPM int EC_KEY_generate_key(EC_KEY *eckey);
+#;
+
+
+#! @brief return the EC_GROUP of the given EC_KEY;
+#! @param eckey the EC_KEY;
+#! @return The EC_GROUP for this key, or NULL;
+
+1abcd const EC_GROUP * EC_KEY_get0_group(const EC_KEY *eckey);
+#;
+
+#! @brief return the field type of this ECC method;
+#! @param meth the EC_METHOD;
+#! @return The NID of the field type for this method;
+#! @note see \ref ICC_EC_NID_ENUM;
+
+1abcd int EC_METHOD_get_field_type(const EC_METHOD *meth);
+#;
+
+#! @brief return the method this EC group uses ;
+#! @param group the EC_GROUP containing the method;
+#! @return the EC_METHOD used by this group, NULL on fail;
+
+1abcd const EC_METHOD * EC_GROUP_method_of(const EC_GROUP *group);
+#;
+
+#! @brief Allocate a new EC_POINT object and initialize as a member of a particular EC curve family;
+#! @param group the EC_GROUP the point will be a member of;
+#! @return the newly allocated EC_POINT or NULL on failure;
+
+1abcd EC_POINT * EC_POINT_new(const EC_GROUP *group);
+#;
+
+#! @brief Free an EC_POINT object ;
+#! @param ecpoint the EC_POINT object to free;
+
+1abcd void EC_POINT_free(EC_POINT *ecpoint);
+
+#;
+#! @brief Get the affine coordinates (X/Y pair) of an EC_POINT in a prime field;
+#! @param group The group the EC curve belongs to ;
+#! @param point The EC_POINT who's coordinates we want ;
+#! @param x A place to return the X coordinate;
+#! @param y A place to return the Y coordinate;
+#! @param ctx working storage for the intermediate calculations,
+#! This may be NULL in which case working space is created and destroyed internally;
+#! @return 1 on success, 0 on failure;
+
+1abcd int EC_POINT_get_affine_coordinates_GFp(const EC_GROUP *group,const EC_POINT *point, BIGNUM *x, BIGNUM *y, BN_CTX *ctx);
+#;
+
+#! @brief Set the affine coordinates (X/Y pair) of an EC_POINT in a prime field;
+#! @param group The group the EC curve belongs to ;
+#! @param point The EC_POINT who's coordinates we want ;
+#! @param x The X coordinate;
+#! @param y The Y coordinate;
+#! @param bn_ctx working storage for the intermediate calculation;
+#! This may be NULL in which case working space is created and destroyed intern
+#! @return 1 on success, 0 on failure;
+
+1abcdE int EC_POINT_set_affine_coordinates_GFp(const EC_GROUP *group, EC_POINT *point, const BIGNUM *x, const BIGNUM *y, BN_CTX *bn_ctx);
+#;
+
+#! @brief Get the affine coordinates (X/Y pair) of an EC_POINT in a binary field;
+#! @param group The group the EC curve belongs to ;
+#! @param point The EC_POINT who's coordinates we want ;
+#! @param x A place to return the X coordinate;
+#! @param y A place to return the Y coordinate;
+#! @param ctx working storage for the intermediate calculation;
+#! This may be NULL in which case working space is created and destroyed internally;
+#! @return 1 on success, 0 on failure;
+
+1abcd int EC_POINT_get_affine_coordinates_GF2m(const EC_GROUP *group,const EC_POINT *point, BIGNUM *x, BIGNUM *y, BN_CTX *ctx);
+#;
+
+#! @brief Set the affine coordinates (X/Y pair) of an EC_POINT in a binary field ;
+#! @param group The group the EC curve belongs to ;
+#! @param point The EC_POINT who's coordinates we want ;
+#! @param x The X coordinate;
+#! @param y The Y coordinate;
+#! @param bn_ctx working storage for the intermediate calculation;
+#! This may be NULL in which case working space is created and destroyed internally;
+#! @return 1 on success, 0 on failure;
+
+1abcdE int EC_POINT_set_affine_coordinates_GF2m(const EC_GROUP *group, EC_POINT *point,const BIGNUM *x, const BIGNUM *y, BN_CTX *bn_ctx);
+#;
+
+#! @brief Extract the public key component from an eckey ;
+#! @param eckey the EC_KEY containing the public key;
+#! @return an EC_POINT which is the public key, or NULL on failure ;
+
+1abcd const EC_POINT *EC_KEY_get0_public_key(const EC_KEY * eckey);
+#;
+
+#! @brief Set the public key component of an eckey ;
+#! @param eckey an EC_KEY ;
+#! @param pub_key the EC_POINT which is the public key;
+#! @return 1 on success, some other value on failure;
+
+1abcdE int EC_KEY_set_public_key(EC_KEY *eckey, const EC_POINT * pub_key);
+#;
+
+#! @brief Get the private key component of an eckey ;
+#! @param eckey an EC_KEY ;
+#! @return a pointer to a BIGNUM (integer) containing the private key or NULL on failure;
+
+1abcdE const BIGNUM * EC_KEY_get0_private_key(const EC_KEY * eckey);
+#;
+
+#! @brief Set the public key component of an eckey ;
+#! @param eckey an EC_KEY ;
+#! @param priv_key the EC_POINT which is the public key;
+#! @return 1 on success, some other value on failure;
+
+1abcdE int EC_KEY_set_private_key(EC_KEY *eckey, const BIGNUM * priv_key);
+#;
+
+#! @brief Compute an EC Diffie-Hellman key ;
+#! @param out a place to store the generated key;
+#! @param outlen the length of the generated key;
+#! @param pub_key the public key;
+#! @param eckey The EC_KEY to use;
+#! @param KD_FUNC - the key determination function. Typically something like SHA-1 hash of the data it's fed.;
+#! @return 1 on sucess, 0 on fail, -1 if 'something bad happened'  ;
+#!        Typically invalid input data ;
+#! @note A NULL KDF is allowed, in which case the identity KDF is used ;
+#!       i.e. outlen bytes of key is copied to out ;
+
+1abcdE int ECDH_compute_key(void *out, size_t outlen, const EC_POINT *pub_key, EC_KEY *eckey,void * (*KD_FUNC)(const void *in, size_t inlen, void *out, size_t *outlen));
+#;
+
+#! @brief Import the DER representation of an EC private key;
+#! @param eckey a pointer to a pointer to an EC_KEY, EC_KEY * may be NULL (recommended), in which case a new key ;
+#! will be allocated; 
+#! @param in a pointer to pointer to the DER encoding. This will be modified to point to the 'next' item ;
+#! @param len the expected length of the DER encoded data;
+#! @return a pointer to the EC_KEY or NULL on failure;
+#! @note Use ICC_EC_KEY_free to release the returned object ;
+
+1abcd EC_KEY *d2i_ECPrivateKey(EC_KEY **eckey, const unsigned char **in, long len);
+#; 
+
+#! @brief Export an EC private key as the DER representation;
+#! @param eckey a pointer an EC_KEY;
+#! @param out a pointer to buffer to hold the DER encoding. ;
+#! -  *out may be NULL in which case a buffer is allocated ;
+#! -  out maybe NULL in which case the required buffer size is returned ;
+#! - The calling application should free internally allocated  memory using ;  
+#! free or an equivalent function.;
+#! @return >0 The length of the DER encoded data, otherwise an error occurred;
+#! @note The DER encoded structure contains the private key, ;
+#!       the curve parameters and the public key ;
+
+1abcd int i2d_ECPrivateKey(EC_KEY *eckey, unsigned char **out);
+#;
+
+#! @brief Import the DER representation of the EC parameters;
+#! @param eckey a pointer to a pointer to an EC_KEY, EC_KEY * may be NULL (recommended), in which case a new key will be allocated ;
+#! @param in a pointer to pointer to the DER encoding, this will be modified to point to the next item ;
+#! @param len the expected length of the DER encoded data ;
+#! @return a pointer to the EC_KEY or NULL on failure ;
+#! @note Use ICC_EC_KEY_free to release the returned object ;
+
+1abcd EC_KEY *d2i_ECParameters(EC_KEY **eckey, const unsigned char ** in, long len);
+#;
+
+#! @brief Export a set of EC parameters as the DER representation;
+#! @param eckey a pointer an EC_KEY;
+#! @param out a pointer to a buffer to hold the DER encoding ;
+#! -  *out may be NULL in which case a buffer is allocated ;
+#! -  out may be NULL in which case the required buffer length is returned ;
+#! - The calling application should free internally allocated  memory using ;   
+#! free or an equivalent function.;
+#! @return >0 The length of the DER encoded data, otherwise an error occurred;
+
+1abcd int i2d_ECParameters(EC_KEY *eckey, unsigned char **out);
+#;
+
+#! @brief Is the point a member of the EC_GROUP group ?;
+#! @param group the group of the elliptic curve;
+#! @param point the point to test;
+#! @param ctx temporary storage for intermediate computations;
+#! @return 0 if the point isn't on this EC_CURVE, 1 if it is ;
+
+1abcd int EC_POINT_is_on_curve(const EC_GROUP *group, const EC_POINT *point,BN_CTX *ctx);
+#;
+
+#! @brief Is the point the point at infinity of the EC_GROUP group ?;
+#! @param group the group of the elliptic curve;
+#! @param point the point to test;
+#! @return 1 if this point is the point at infinity, 0 if it isn't ;
+
+1abcd int EC_POINT_is_at_infinity(const EC_GROUP *group, const EC_POINT *point);
+#;
+
+#! @brief Check that the EC_KEY is valid;
+#! @param eckey The EC_KEY to check for validity ;
+#! @return 1 if the key appears valid, 0 for an invalid key;
+
+1abcd int EC_KEY_check_key(const EC_KEY *eckey);
+#;
+
+#! @brief perform an EC_POINT multiplication by (something) - a fairly complex, but useful function;
+#! @param group the group the EC_POINT belongs to;
+#! @param r The point to perform the multiplication on;
+#! @param g_scalar - group scalar, typically the order of the group, may be NULL in some combinations of use;
+#! @param point another EC_POINT, multiply the points together, may be NULL in some combinations of use;
+#! @param p_scalar scale the point by a constant, may be NULL in some combinations of use;
+#! @param bn_ctx temporary storage for intermediate calculations;
+#! @return 0 on failure, 1 on success;
+#! @note You need to understand EC operations to use this;
+ 
+1abcd int EC_POINT_mul(const EC_GROUP * group, EC_POINT *r, const BIGNUM *g_scalar, const EC_POINT *point, const BIGNUM *p_scalar, BN_CTX *bn_ctx);
+#;
+
+#! @brief get the order of the EC_GROUP;
+#! @param group The EC_GROUP ;
+#! @param order a place to store the group order;
+#! @param bn_ctx temporary storage for intermediate calculations;
+#! @return 0 on failure, 1 on success;
+
+1abcd int EC_GROUP_get_order(const EC_GROUP *group, BIGNUM *order, BN_CTX *bn_ctx);
+#;
+
+#! @brief duplicate an EC_POINT, typically used because you are going to damage the one you have currently ...;
+#! @param point the EC_POINT to duplicate;
+#! @param group the group the point belongs to;
+#! @return a copy of the EC_POINT or NULL on failure;
+
+1abcd  EC_POINT * EC_POINT_dup(const EC_POINT *point ,const EC_GROUP *group);
+
+#;
+#! @brief Create the data object used to contain PBE configuration ;
+#! @param alg The NID of the cipher algorithm. ;
+#! @param iter the number of iterations of the key generation to run;
+#! @param salt the PBE salt data;
+#! @param saltlen the length of the salt ;
+#! @return An X509_ALGOR structure (Blob) containing the algorithm configuration;
+
+
+0abcdEC X509_ALGOR *PKCS5_pbe_set(int alg, int iter, unsigned char *salt, int saltlen);
+
+#;
+#! @brief Create the data object used to contain PBE2 configuration ;
+#! @param cipher The cipher algorithm. ;
+#! @param iter the number of iterations of the key generation to run;
+#! @param salt the PBE salt data;
+#! @param saltlen the length of the salt ;
+#! @return An X509_ALGOR structure (Blob) containing the algorithm configuration; 
+#! @note use PKCS5_pbe2_set_iv instead ! ;
+#! This version of the API is badly broken. A random IV is created ;
+#! which is internal to the specific X509_ALGOR structure so decryption ;
+#! with another object created with identical parameters is impossible ; 
+
+
+0abcdEC X509_ALGOR *PKCS5_pbe2_set(const EVP_CIPHER *cipher, int iter, unsigned char *salt, int saltlen);
+
+#;
+#! @brief PBE encrypt/decrypt ;
+#! @param algor the blob containing the PBE algorithm configuration ;
+#! @param pass the user supplied passphrase ;
+#! @param passlen the length of the passphrase;
+#! @param in the input data to encrypt/decrypt;
+#! @param inlen the length of the input data;
+#! @param data a pointer to the incoming data buffer - pointer will be modified ;
+#! @param datalen the length of the input data buffer ;
+#! @param en_de 0 for decrypt, otherwise encrypt;
+#! @return a newly malloc'd buffer containing the encrypted or decrypted data ;
+
+0abcdE unsigned char * PKCS12_pbe_crypt(X509_ALGOR *algor, const char *pass, int passlen, unsigned char *in, int inlen, unsigned char **data, int *datalen, int en_de);
+
+#;
+#! @brief Free an X509_ALGOR blob returned by PKCS5_pbe2_set ;
+#! @param alg the blob to free;
+
+0abcd void X509_ALGOR_free(X509_ALGOR *alg);
+
+#;
+#! @brief returns NID corresponding to text string 's'. s can be a long name,;
+#!        a short name or a string repesenting the OID of an object.;
+#!         - i.e. NIST curve P-256 can be input as 'prime256v1' ;
+#!           or '1.2.840.10045.3.1.7' ;
+#! @param text the text string to convert to an ASN.1 object NID;
+#! @return the NID corresponding to an ASN.1 object or NID_undef (0) on error;
+
+0abcd int OBJ_txt2nid(char *text);
+
+#;
+#! @brief Base64 Encode a block of data - 'just do it' - no whitespace;
+#! handling etc.;
+#! @param to destination buffer;
+#! @param from source buffer;
+#! @param n number of from bytes to convert;
+#! @return the number of bytes in the encoded output;
+
+0abcdE int EVP_EncodeBlock(unsigned char *to, unsigned char *from, int n);
+
+#;
+#! @brief Base64 Decode a block of data - 'just do it' - no whitespace;
+#! handling etc.;
+#! @param to destination buffer;
+#! @param from source buffer;
+#! @param n number of from bytes to convert;
+#! @return the number of bytes in the decoded output;
+#! @note Extra '\0' characters may be appended to the output data ;
+#! depending on how the data is packed/aligned ; 
+
+0abcdE int EVP_DecodeBlock(unsigned char *to, unsigned char *from, int n);
+
+#;
+#! @brief Allocate a new CMAC context;
+#! @return NULL on failure, or a pointer to an uninitialized CMAC_CTX;
+
+0abcdE CMAC_CTX * CMAC_CTX_new(void);
+
+#;
+#! @brief free a CMAC context ;
+#! @param cmac_ctx a pointer to the CMAC context to free;
+
+0abcd void CMAC_CTX_free(CMAC_CTX *cmac_ctx);
+
+#;
+#! @brief Initialize a CMAC operation;
+#! @param cmac_ctx a pointer to a CMAC_CTX; 
+#! @param cipher a pointer to an EVP_CIPHER structure;
+#! @param key a key buffer, the size must match that;
+#!   needed by the CMAC cipher;
+#! @param keylen the key length;
+#! @return 1 on success, 0 on failure;
+#! @note With CMAC (Unlike HMAC) there's no option to partially reuse;
+#! the CMAC context. Some internal derived data depends on the cipher and;
+#! the key and must be regenerated if either change;    
+
+0abcdME  int CMAC_Init(CMAC_CTX *cmac_ctx,const EVP_CIPHER *cipher,unsigned char *key,unsigned int keylen);
+
+#;
+#! @brief Update phase of a CMAC operation;
+#! @param cmac_ctx a pointer to a CMAC_CTX;
+#! @param in a pointer to data to MAC;
+#! @param inlen the length of the input data;
+#! @note blocked/aligned data will be more efficient, but this will;
+#! survive incorrectly blocked/misaligned data;
+
+0abcdE int CMAC_Update(CMAC_CTX *cmac_ctx,unsigned char *in,unsigned int inlen);
+
+#;
+#! @brief Finish a CMAC operation and return the CMAC value;
+#!    @param cmac_ctx a pointer to a CMAC_CTX;
+#!    @param mac a pointer to the mac buffer;
+#!    @param maclen Requested mac length 0< maclen <= block size;
+#!    @return 1 on success, 0 on failure;
+#!    @note a request for an overly long mac will result in an error;
+
+0abcdME int CMAC_Final(CMAC_CTX *cmac_ctx,unsigned char *mac,unsigned int maclen); 
+
+#;
+#! @brief Allocate a new AES GCM context;
+#! @return NULL on failure, or a pointer to an uninitialized AES_GCM_CTX;
+
+0abcdE AES_GCM_CTX * AES_GCM_CTX_new(void);
+
+#;
+#! @brief free a AES_GCM context ;
+#! @param aes_gcm_ctx a pointer to the AES_GCM context to free;
+
+0abcd void AES_GCM_CTX_free(AES_GCM_CTX *aes_gcm_ctx);
+
+#;
+#! @brief set up an AES_GCM context for speed/performance trade-offs;
+#! @param aes_gcm_ctx a pointer to the AES_GCM context to free;
+#! @param mode The operation to perform ;
+#! Valid values are AES_GCM_CTRL_SET_ACCEL (0) and ;
+#! AES_GCM_CTRL_GET_ACCEL (1) ; 
+#! @param accel the desired speed/space trade off. 0 (default) is slowest/most compact. See \ref ICC_GCM_ACCEL for details of the space/speed tradoffs made;
+#! @param ptr a pointer to an value (integer) in which to return the current ;
+#! acceleration state - always sets teh value to 4;
+#! @return ICC_OSSL_SUCCESS on success, ICC_FAILURE on failure;
+#! @note Deprecated. We use OpenSSL assembler paths now which are faster ;
+#!       than the alternate 'C' paths this was intended to support;
+
+
+0abcd int AES_GCM_CTX_ctrl(AES_GCM_CTX *aes_gcm_ctx,int mode,int accel,void *ptr);
+
+#;
+#! @brief Initialize a AES_GCM operation, this is common to encrypt and decrypt;
+#! @param aes_gcm_ctx a pointer to a AES_GCM_CTX; 
+#! @param iv an iv buffer;
+#! @param ivlen the length of the iv buffer, 12 bytes is recommended. 1 - 2^56 bytes is possible ;
+#! @param key a key buffer;
+#! @param keylen the length of the key (bytes) 16,24,32;
+#! @return ICC_OSSL_SUCCESS on success, ICC_FAILURE on failure;
+
+
+0abcdECP  int AES_GCM_Init(AES_GCM_CTX *aes_gcm_ctx,unsigned char *iv, unsigned long ivlen,unsigned char *key,unsigned int keylen);
+
+#;
+#! @brief Update phase of a AES_GCM encrypt operation;
+#! @param aes_gcm_ctx a pointer to a AES_GCM_CTX;
+#! @param aad a pointer to Additional Authentication Data to hash;
+#! @param aadlen the length of the aad 0 <= aadlen <= 2^56 bytes TOTAL - not per call;
+#! @param data a pointer to the data to encrypt and hash ;
+#! @param datalen the length of the data 0 <= datalen <= 2^56 bytes TOTAL - not per call ;  
+#! @param out a pointer to a place to hold up to one block of residual data from the previous update ;
+#! @param outlen a place to store the length of any returned data ;
+#! @return ICC_OSSL_SUCCESS on success, ICC_FAILURE on failure;
+#! @note blocked/aligned data will be more efficient, but this will;
+#! survive incorrectly blocked/misaligned aad/data;
+#! @note All the aad wanted must be supplied before any data is supplied, but both aad and data can;
+#! be supplied in segments;
+
+0abcdE int AES_GCM_EncryptUpdate(AES_GCM_CTX *aes_gcm_ctx,unsigned char *aad, unsigned long aadlen,unsigned char *data,unsigned long datalen,unsigned char *out, unsigned long *outlen);
+
+#;
+#! @brief Update phase of a AES_GCM encrypt operation;
+#! @param aes_gcm_ctx a pointer to a AES_GCM_CTX;
+#! @param aad a pointer to Additional Authentication Data to hash;
+#! @param aadlen the length of the aad 0 <= aadlen <= 2^56 bytes TOTAL - not per call;
+#! @param data a pointer to the data to encrypt and hash ;
+#! @param datalen the length of the data 0 <= datalen <= 2^56 bytes TOTAL - not per call ;  
+#! @param out a pointer to a place to hold up to one block of residual data from the previous update ;
+#! @param outlen a place to store the length of any returned data ;
+#! @return ICC_OSSL_SUCCESS on success, ICC_FAILURE on failure;
+#! @note blocked/aligned data will be more efficient, but this will;
+#! survive incorrectly blocked/misaligned aad/data;
+#! @note All the aad wanted must be supplied before any data is supplied, but both aad and data can;
+#! be supplied in segments;
+
+0abcdE int AES_GCM_DecryptUpdate(AES_GCM_CTX *aes_gcm_ctx,unsigned char *aad, unsigned long aadlen,unsigned char *data,unsigned long datalen,unsigned char *out, unsigned long *outlen);
+
+#;
+#! @brief Finish a AES_GCM encrypt operation and return any remaining ciphertext and the auth tag;
+#! @param aes_gcm_ctx a pointer to a AES_GCM_CTX;
+#! @param out a pointer to a place to hold up to one block of residual data from the previous update ;
+#! @param outlen a place to store the length of any returned data ;
+#! @param hash a place to store the final auth_tag (hash) value (16 bytes);   
+
+0abcdE int AES_GCM_EncryptFinal(AES_GCM_CTX *aes_gcm_ctx,unsigned char *out, unsigned long *outlen,unsigned char *hash); 
+
+#;
+#! @brief Finish a AES_GCM decrypt operation and return any remaining plaintext and verify that ;
+#! the auth tag matches the one supplied     ;
+#! @param aes_gcm_ctx a pointer to a AES_GCM_CTX;
+#! @param out a pointer to a place to hold up to one block of residual plaintext from the previous update ;
+#! @param outlen a place to store the length of any returned data ;
+#! @param hash the auth_tag (hash) value to check;   
+#! @param hlen the length of the authtag to check 0 < hlen < AES_BLOCK_SIZE (16)
+#! @return ICC_OSSL_SUCCESS on success, ICC_OSSL_FAILURE on functional failure, -1 on a hash mismatch;
+
+0abcdE int AES_GCM_DecryptFinal(AES_GCM_CTX *aes_gcm_ctx,unsigned char *out, unsigned long *outlen,unsigned char *hash,unsigned int hlen); 
+
+#;
+#! @brief
+#! Note that this generator returns a 64 bit sequence ;
+#! guaranteed to not repeat for at least 2^32 iterations ;
+#! and it SHOULD be unique on each invocation ;
+#! As ICC has no retained state, we rely on the ;
+#! TRNG for the startup uniqueness ;
+#! @param aes_gcm_ctx An aes_gcm_ctx;
+#! @param out a 64 bit (8 byte) buffer to return unique values in ;
+#! @note IV Generation and AES_GCM share the same state structure ;
+#! but are otherwise independent, so you can use the IV generator ;
+#! without doing GCM, or vice-versa;
+#! - See AES_GCM_generateIV_NIST for something matching the FIPS 140-3 ;
+#!   implementation guideance;
+#! @return ICC_OSSL_SUCCESS on success, ICC_OSSL_FAILURE on failure. i.e. if more than 2^64-1 samples have ;
+#! been extracted without reseeding. (Should never happen) ;
+
+0abcdE int AES_GCM_GenerateIV(AES_GCM_CTX *aes_gcm_ctx,unsigned char *out);
+
+#;
+#! @brief Perform the GCM Hash function;
+#! @param gcm_ctx an ICC AES_GCM context;
+#! @param H the hash key;
+#! @param Hash Retained data/output data, initialized to 0  at first use;
+#! @param data the input data to hash, any partial blocks WILL be 0 padded;
+#! @param datalen the length of the data;
+#! @note if supported, any acceleration set up the the AES_GCM context should ;
+#! work for this routine;
+#! @note the field chosen is 1 + a +a^2 + a^7 + a^128;
+#! @note this is defined as a little endian bit field operation so ;
+#! to multiply 2x2 the input data would be;
+#! 01000......000 01000.....000 -> 00100....0000;
+#! NOT 0000.....00010 (etc);
+#! @note this can be used in chaining mode by not modifying Hash ;
+#! but all blocks must be 16bytes until the last block;
+
+0abcdM void GHASH(AES_GCM_CTX *gcm_ctx,unsigned char *H,unsigned char *Hash,unsigned char *data,unsigned long datalen);
+
+#;
+#!  @brief Perform an AES CCM Encrypt operation,;
+#!  provide the nonce,aad, data and key, output buffer and taglength;
+#!  @param nonce The nonce, can be 32-128 bits long, < 64 is not recommended;
+#!  @param nlen the length of the nonce;
+#!  @param key an aes key;
+#!  @param keylen the length (in bytes) of the AES key;
+#!  @param aad Additional Authentication data, hashed, but not encrypted;
+#!  @param aadlen the length of the aad;
+#!  @param data the data buffer to encrypt;
+#!  @param datalen the length of the data; 
+#!  @param out the output buffer;
+#!  @param outlen a place to store the returned output length;
+#!  - which WILL be rounded up to a 16 byte boundary +16 bytes;
+#!  @param taglen the desired length of the auth tag;
+#!  @return ICC_OSSL_SUCCESS if O.K., ICC_FAILURE on failure;
+#!  @note AES_CCM is (by specification and design) a one shot algorithm;
+#!  you have to feed everything into this one call;
+
+0abcdEP int AES_CCM_Encrypt(unsigned char *nonce,unsigned int nlen, unsigned char *key,unsigned int keylen,unsigned char *aad, unsigned long aadlen,unsigned char *data,unsigned long datalen,unsigned char *out, unsigned long *outlen,unsigned int taglen);
+
+#;
+#! @brief Perform an AES CCM Decrypt operation,;
+#!  provide the nonce,aad, data and key, output buffer and taglength;
+#!  @param nonce The Nonce, can be 32-128 bits long, < 64 is not recommended;
+#!  @param nlen the length of the nonce;
+#!  @param key an aes key;
+#!  @param keylen the length (in bytes) of the AES key;
+#!  @param aad Additional Authentication data, hashed, but not encrypted;
+#!  @param aadlen the length of the aad;
+#!  @param data the data to encrypt (tag is at the end of this);
+#!  @param datalen the length of the data buffer (data + tag); 
+#!  @param out the output buffer;
+#!  @param outlen a place to store the returned output length;
+#!  - which WILL be rounded up to a 16 byte boundary +16 bytes;
+#!  @param taglen the desired length of the auth tag;
+#!  @return ICC_OSSL_SUCCESS if O.K., ICC_FAILURE on failure;
+#!  @note This (by spec) returns no data on failure. However as;
+#!  we'd have to allocate an internal buffer, which would still be;
+#!  accessible to the caller within the same process, we simple;
+#!  erase any partial data in the output buffer on failure instead.;
+#!  - So , be aware that the output buffer WILL be overwritten,;
+#!  no matter what;
+#! @note AES_CCM is (by specification and design) a one shot algorithm;
+#! you have to feed everything into this one call;
+#! i.e. We can't return any decrypted data unless the tags match;
+#! @note datalen in this call INCLUDES the length of the tag generated ;
+#! by the corresponding Encrypt call;
+
+0abcdEP int AES_CCM_Decrypt(unsigned char *nonce,unsigned int nlen,unsigned char *key, unsigned int keylen, unsigned char *aad, unsigned long aadlen, unsigned char *data, unsigned long datalen, unsigned char *out, unsigned long *outlen, unsigned int taglen);
+
+#;
+#! @brief Get an ICC RNG handle;
+#! @param algname The name of the algorithm to use. Something like ;
+#! 'SHA1' 'SHA512' for the hash based PRNG's. 'AES-256-ECB' for cipher based;
+#! and 'HMAC-SHA1' for HMAC based. ;
+#! @return A PRNG handle or NULL on failure.;
+#! @note that this is a pointer to an internal;
+#! table and should never be free'd;
+#! @note the RNG API is experimental, and may not be stable between ICC releases;
+#! Also note that the PRNG's returned for a FIPS mode context is limited to ;
+#! FIPS compliant PRNG's ;
+#! - See \ref subsec_alginit_RNG ;
+
+0abcdEMPC PRNG * get_RNGbyname(const char *algname);
+
+#;
+#! @brief  Allocate a new RNG context. This is working space for ;
+#! an instance of a RNG, and should be free'd via PRNG_CTX_free when;
+#! done.;
+#! @return A PRNG_CTX or NULL on failure ;
+#! @note RNG_CTX's are not intrinsically thread safe;
+#! @note the RNG API is experimental, and may not be stable between ICC releases;
+
+0abcdEF PRNG_CTX *RNG_CTX_new(void);
+
+#;
+#! @brief Cleanup and free a previously allocated PRNG_CTX;
+#! @param prng_ctx a PRNG_CTX created by calling PRNG_CTX_new;
+#! @note the RNG API is experimental, and may not be stable between ICC releases;
+
+0abcdF void RNG_CTX_free(PRNG_CTX *prng_ctx);
+
+#;
+#! @brief Initialize a PRNG_CTX in a specific mode;
+#! @param ctx a PRNG_CTX. PRNG_CTX's can be reused.;
+#! @param alg a PRNG algorithm;
+#! @param person a personalization string. This should either be ;
+#! -  NULL (recommended) in which case this is generated internally ;
+#! - or this input should be unique for this PRNG instance.;
+#! @param personal length of the personalization string;
+#! @param strength The desired bit strength of the PRNG. See SP800-57;
+#! maximum is 256, but not all algorithms support that. Using 0 is ;
+#! recommended and will select the highest available strength;
+#! @param prediction_resistance ;
+#! - Recommended off (0). ;
+#! - If enabled the PRNG will be continually reseeded from the TRNG.; 
+#! - Enabling prediction resistance has a large performance impact ;
+#! - Allowed in FIPS mode.;
+#! @return The current state of the PRNG, SP800_90ERROR or SP800_90CRIT;
+#! mean the PRNG is disabled.SP800_90INIT is the 'normal' state expected;
+#! @note the RNG API is experimental, and may not be stable between ICC releases;
+
+0abcdEF SP800_90STATE RNG_CTX_Init(PRNG_CTX *ctx,PRNG *alg,unsigned char *person, unsigned int personal,unsigned int strength, int prediction_resistance);
+
+#;
+#! @brief Generate random data from a PRNG;
+#! @param ctx an Initialized PRNG_CTX;
+#! @param buffer a pointer to a buffer to hold the random data;
+#! @param n the number of bytes to extract ;
+#! @param adata additional input data to mix in ( NULL recommended);
+#! @param adatal The number of bytes of additional data provided;
+#! @return the PRNG_CTX state. SP800_90RUN or SP800_90RESEED are normal ;
+#! operating return values,;
+#! SP800_90RESEED indicates that the PRNG needs reseeding ;
+#! By default the PRNG will be reseeded automatically before ;
+#! returning the NEXT data block;
+#! @note the RNG API is experimental, and may not be stable between ICC releases;
+#! - ICC defaults to automatically reseed and segments oversize data requests ;
+#! so this API remains FIPS compliant with arbitrary request sizes ;
+#! if the default settings are not changed;
+
+
+0abcdEF SP800_90STATE RNG_Generate(PRNG_CTX *ctx,unsigned char *buffer,unsigned int n,unsigned char *adata,unsigned int adatal);
+
+#;
+#! @brief Reseed the PRNG;
+#! @note normally this call is unnecessary. These PRNG's are automatically;
+#! reseeded often enough to avoid security problems;
+#! @param ctx an Initialized PRNG_CTX;
+#! @param adata additional input data to mix in. (NULL recommended);
+#! @param adatal The number of bytes of additional data provided;
+#! @return the PRNG_CTX state. SP800_90RUN or SP800_90RESEED are normal ;
+#! operating return values .(RESEED;
+#! indicates that the PRNG will be reseeded automatically before ;
+#! returning the NEXT data block;
+#! @note the RNG API is experimental, and may not be stable between ICC releases;
+#! - The ICC API by default reseeds automatically from a TRNG instance of known quality,;
+#! so in general this call is unnecessary in either FIPS or non-FIPS modes;
+
+0abcdEF SP800_90STATE RNG_ReSeed(PRNG_CTX *ctx,unsigned char *adata,unsigned int adatal);
+
+#;
+#! @brief Get/Set RNG internal states;
+#! - This interface can read and write data and trigger self test. ;
+#! - Where input data is required it's specified in "arg" ;
+#! - Where output data is returned it's placed in the location specified by "ptr";
+#! - In general most of these options are available because they are needed ;
+#! to formally test compliance with the standard, not because they are ;
+#! expected to be used by applications;
+#! i.e. SP800_90_GETMAXDATA is useful only if automatic reseed ;
+#! is disabled ;
+#! - RNG_CTX_ctrl  has two possible modes of use ;
+#!   - Setting a variable ;
+#!     - RNG_CTX_ctrl(rng_ctx,SP800_90_SETRESEED,0,NULL) or;
+#!     - RNG_CTX_ctrl(rng_ctx,SP800_90_SETRESEED,0,&rv) where;
+#! rv is an integer which will hold the value actually set after the call.;
+#!   - Getting a variable;
+#!     - RNG_CTX_ctrl(rng_ctx,SP800_90_GETRESEED,0,&rv) where;
+#! rv is an integer which will hold the current reseed value and the arg;
+#! paramter is ignored. ;
+#! \sa SP800_90CTRL ;
+#! @param ctx an Initialized PRNG_CTX;
+#! @param type the command being issued \ref SP800_90CTRL;
+#! @param arg an integer argument (if needed);
+#! @param ptr - somewhere to store the return value. Usually a pointerto unsigned int;
+#! @return The current state of the PRNG See: \ref SP800_90STATE;
+#! @note the RNG API is experimental, and may not be stable between ICC releases;
+
+0abcdEF SP800_90STATE RNG_CTX_ctrl(PRNG_CTX *ctx,SP800_90CTRL type,int arg, void *ptr);
+
+#;
+#! @brief OpenSSL free;
+#! @param str pointer to the previously allocated block;
+#! @note Some OpenSSL API's allocate storage that the called must free;
+#! i2d_/d2i functions for example;
+#! On some platforms (Windows), using inconsistant allocators and;
+#! mixing debug/non-debug code causes heap corruption;
+
+0abcdF void CRYPTO_free(void *str);
+
+#;
+
+#;
+#! @brief computes a digital signature on the len byte message digest;
+#!       dgst using the private key rsa and places its ASN.1 DER encoding at sigret.; 
+#!       The length of the signature is placed in *siglen.;
+#!       sigret must point to RSA_size bytes of memory.;
+#! @param type The NID of the hash used;
+#! @param dgst a pointer to the digest to sign;
+#! @param dlen the length of the digest;
+#! @param sig a pointer to the buffer in which the signature will be stored;
+#! @param siglen a pointer to a place in which to store the signature length;
+#! @param rsa a pointer to a RSA structure containing the signers private key;
+#! @return ICC_OSSL_SUCCESS, ICC_OSSL_FAILURE;
+#! @note This is used to sign 'pre-hashed' data;
+
+0abcdCEMP int RSA_sign(int type, const unsigned char *dgst, int dlen, unsigned char *sig, unsigned int *siglen, RSA *rsa);
+
+#;
+#! @brief verifies that the signature sigbuf of size siglen matches;
+#!       a given message digest dgst of size len.  rsa is the signer's public;
+#!         key.;
+#! @param type The NID of the hash used to generate the signature;
+#! @param dgst a pointer to the digest to verify;
+#! @param dgst_len the length of the digest;
+#! @param sigbuf a pointer to the buffer in which the signature is be stored;
+#! @param siglen the signature length;
+#! @param rsa a pointer to a RSA structure containing the signers public key;
+#! @return  ICC_OSSL_SUCCESS, ICC_OSSL_FAILURE, ICC_OSSL_FAILURE_TOO;
+#! @note this is used to verify 'pre-hashed' data;
+
+0abcdCEMP int RSA_verify(int type, const unsigned char *dgst, int dgst_len, const unsigned char *sigbuf, int siglen, RSA *rsa);
+
+#; 
+#! @brief return the degree of the curve ;
+#! @param group the curve to get the degree of;
+#! @return The degree of the curve;
+
+1abcd int EC_GROUP_get_degree(const EC_GROUP *group);
+
+#;
+#! @brief get the curve parameters for a prime field EC curve;
+#! @param group the curve to use;
+#! @param p the base of the prime field;
+#! @param a curve coefficient a;
+#! @param b curve coefficient b;
+#! @param ctx a BN_CTX used as scratch space for calculations;
+#! @return 1 on sucess, 0 on fail;
+
+1abcd int EC_GROUP_get_curve_GFp(const EC_GROUP *group, BIGNUM *p, BIGNUM *a, BIGNUM *b, BN_CTX *ctx);
+
+#;
+#! @brief get the curve parameters for a binary field EC curve;
+#! @param group the curve to use;
+#! @param p the EC curve field ;
+#! @param a curve coefficient a;
+#! @param b curve coefficient b;
+#! @param ctx a BN_CTX used as scratch space for calculations;
+#! @return 1 on sucess, 0 on fail;
+
+1abcdE int EC_GROUP_get_curve_GF2m(const EC_GROUP *group, BIGNUM *p, BIGNUM *a, BIGNUM *b, BN_CTX *ctx);
+
+#;
+#! @brief get the generator (base point) of an EC curve ;
+#! @param group the curve ;
+#! @return a pointer to the generator - not a copy, so don't free it !;
+
+1abcdE const EC_POINT *EC_GROUP_get0_generator(EC_GROUP *group);
+
+#;
+#! @brief i2d_ECPublicKey - yes, I know, but the specification is;
+#!        just a BIT STRING so we use i2o;
+#! @param a A pointer to an EC_KEY;
+#! @param out a pointer to a pointer to the output buffer;
+#! -   *out may be NULL in which case a buffer is allocated ;
+#! -    out may be NULL in which case the required buffer length is returned ;
+#! - The calling application should free internally allocated  memory using ;   
+#! free or an equivalent function.;
+#! @return >0 The length of the encoded data, otherwise an error occurred;
+
+1abcd int i2o_ECPublicKey(EC_KEY *a, unsigned char **out);
+
+#;
+#! @brief d2i_ECPublicKey - yes, I know, but the specification is;
+#!        just a BIT STRING so we use o2i;
+#! @param a A pointer to pointer to an EC_KEY;
+#! @param in a pointer a pointer to the input buffer, updated;
+#! @param len length of the input data in bytes;
+#! @return The EC_KEY with the public key populated or NULL;
+#! @note Use EC_KEY_free to release the returned object ;
+
+1abcd EC_KEY * o2i_ECPublicKey(EC_KEY **a, unsigned char **in,long len);
+
+
+#;
+#! @brief Compare two BIGNUM's ;
+#! @param a a BIGNUM;
+#! @param b another BIGNUM;
+#! @return -1 if a < b, 0 if a == b and 1 if a > b ;
+
+0abcdE int BN_cmp(BIGNUM *a,BIGNUM *b);
+
+#;
+#! @brief Add two BIGNUM's ;
+#! @param a a BIGNUM ;
+#! @param b another BIGNUM;
+#! @param r the result BN = 'a + b' - may be a or b;
+#! @return 1 on success, 0 on error;
+
+0abcdE int BN_add(BIGNUM *r,BIGNUM *a, BIGNUM *b);
+
+#;
+#! @brief Subtract two BIGNUM's ;
+#! @param a a BIGNUM ;
+#! @param b another BIGNUM;
+#! @param r the result BN = 'a - b';
+#! @return 1 on success, 0 on error;
+
+0abcdE int BN_sub(BIGNUM *r,BIGNUM *a, BIGNUM *b);
+
+#;
+#! @brief  multiplies a by b and finds the non-negative remainder ;
+#! respective to modulus m ('r=(a*b) mod m'). ;
+#! r may be the same BIGNUM as a or b.;
+#! @return 1 on success, 0 on error;
+
+0abcdE int BN_mod_mul(BIGNUM *r, BIGNUM *a, BIGNUM *b, const BIGNUM *m, BN_CTX *ctx);
+
+#;
+#! @brief Convert a PKCS#8 encoded structure to EVP ;
+#! @param p8 a pointer to a PKCS8_PRIV_KEY_INFO structure;
+#! @return a pointer to an EVP_PKEY or NULL on failure;
+ 
+0abcd EVP_PKEY *EVP_PKCS82PKEY(PKCS8_PRIV_KEY_INFO *p8);
+
+#;
+#! @brief Convert an EVP_PKEY into a PKCS#8 encoded structure;
+#! @param pkey a pointer to an EVP_PKEY;
+#! @return a pointer to a PKCS8_PRIV_KEY_INFO structure or NULL on error;
+
+0abcd PKCS8_PRIV_KEY_INFO *EVP_PKEY2PKCS8(EVP_PKEY *pkey);
+#;
+
+#; 
+#! @brief free a PKCS8_PRIV_KEY_INFO structure;
+#! @param p8 a pointer to the  PKCS8_PRIV_KEY_INFO structure to free;
+
+0abcd void PKCS8_PRIV_KEY_INFO_free(PKCS8_PRIV_KEY_INFO *p8);
+
+#; 
+#! @brief DER decode private key data into a PKCS8_PRIV_KEY_INFO structure ;
+#! @param p8 a pointer to a an already allocated PKCS8_PRIV_KEY_INFO structure or NULL ;
+#! @param pp a pointer to a pointer to the DER encoded data.;
+#!        This value is updated to point one byte past the end of the input;
+#! @param length length of the input data;
+#! @return a pointer to a PKCS8_PRIV_KEY_INFO structure when it is successful or NULL on failure; 
+#! @note Use PKCS8_PRIV_KEY_INFO_free to release the returned object ;
+
+0abcd  PKCS8_PRIV_KEY_INFO * d2i_PKCS8_PRIV_KEY_INFO(PKCS8_PRIV_KEY_INFO *p8,unsigned char **pp,long length);
+
+#;
+#! @brief DER encode a PKCS8_PRIV_KEY_INFO structure ;
+#! @param p8 pointer to a  PKCS8_PRIV_KEY_INFO structure;
+#! @param pp a pointer to a buffer to hold the DER encoded data ;
+#! -   *pp may be NULL in which case the buffer is allocated internally ;
+#! -    pp may be NULL in which case the required buffer length is returned ;
+#! - The calling application should free internally allocated  memory using ; 
+#! free or an equivalent function.;
+#! @return >0 The length of the DER encoded data, otherwise an error occurred ;
+
+0abcd int i2d_PKCS8_PRIV_KEY_INFO(PKCS8_PRIV_KEY_INFO *p8,unsigned char **pp);
+
+#;
+#! @brief DER encode EC key parameters ;
+#! @param group The group the key belongs to ;
+#! @param out A pointer to the buffer to hold the DER encoded parameters ;
+#! -  *out is NULL then a buffer is allocated internally ;
+#! -   out is NULL then the required buffer length is returned ;
+#! - The calling application should free internally allocated  memory using ; 
+#! free or an equivalent function.;
+#! @return >0 The length of the DER encoding, otherwise an error occurred ; 
+#! @note This is the format specified in ANSI X9.62 ;
+
+0abcd int i2d_ECPKParameters(const EC_GROUP * group, unsigned char **out);
+
+#;
+#! @brief import DER encoded EC key parameters ;
+#! @param groupP A pointer to a pointer to an EC_GROUP structure to hold the group the key belongs to, if *groupP is NULL a new EC_GROUP will be allocated ;
+#! @param in A pointer to the buffer to holding the DER encoded parameters (updated as the data is parsed) ;
+#! @param len The length of the DER encoded data ;
+#! @return A pointer to the EC_GROUP or NULL on failure ;
+#! @note This is the format specified in ANSI X9.62 ;
+#! @note Use EC_GROUP_free to release the returned object ;
+
+0abcd EC_GROUP * d2i_ECPKParameters(EC_GROUP ** groupP, unsigned char **in , long len);
+
+#;
+#! @brief free an EC_GROUP structure ;
+#! @param group the EC_GROUP structure to free ;
+#! @note Most EC_GROUP structures are embedded inside EC_KEY objects ;
+#! Only use this on the return value from d2i_ECPKParameters ;
+
+0abcd void EC_GROUP_free(EC_GROUP *group);
+
+#;
+#! @brief Set the group in an EC_KEY any existing group will be ;
+#!        discarded;
+#! @param key an EC_KEY - typically a newly allocated one ;
+#! @param group the EC group to use (will be duplicated) ;
+#! @return 1 on success, 0 otherwise ;
+
+0abcdE int EC_KEY_set_group(EC_KEY *key,const EC_GROUP *group);
+
+#;
+#! @brief Duplicate an EC_KEY ;
+#! @param ec the EC_KEY to duplicate ;
+#! @return A pointer to a new EC_KEY or NULL on error;
+#! free the returned object with EC_KEY_free ;
+
+0abcdE EC_KEY * EC_KEY_dup(const EC_KEY *ec);
+
+#;
+#! @brief Return a key derivation context for the specified mode;
+#! Implemented modes are:;
+#! [SHA1..SHA512]-[CTR|FB|DP];
+#! [[AES|CAMELLIA]-[128|192|256]-[CTR|FB|DP];
+#! i.e. 'SHA384-CTR' 'AES-192-DP';
+#! Non-FIPS allowed modes are not returned in FIPS mode.;
+#! @param kdfname The name of the function to use;
+#! @return A KDF pointer, or NULL;
+#! @note - Do not free the KDF pointer, it points to an internal table;
+#! - The KDF API is experimental, and may not be stable between ICC releases;
+#! - See \ref subsec_alginit_KDF ;
+
+0abcdEPC const KDF * SP800_108_get_KDFbyname(char *kdfname);
+
+#;
+#! @brief Perform a Key Derivation function based on one of the ;
+#! modes descrived in NIST SP800-108 ;
+#! @param xctx a KDF ;
+#! @param Ki The derivation key;
+#! @param Kilen The length of the drivation key;
+#! @param Label Protocol specific nonce data;
+#! @param Llen The length of Label ;
+#! @param Context Instance specific nonce data;
+#! @param Clen length of Context;
+#! @param K0 The buffer in which to store the derived key;
+#! @param L The length in BYTES of the derived key ;
+#! @return 1 on sucess, 0 on failure, -1 on 'something bad happened' ;
+#! @note the KDF API is experimental, and may not be stable between ICC releases;
+
+0abcdE int SP800_108_KDF(const KDF *xctx,unsigned char *Ki,unsigned int Kilen,unsigned char *Label, unsigned int Llen,unsigned char *Context, unsigned int Clen,unsigned char *K0,unsigned int L);
+
+#;
+#! @brief allocates and initializes a DSA_SIG structure.;
+#! @return a pointer to a new DSA_SIG structure or NULL on failure;
+
+0abcdE DSA_SIG * DSA_SIG_new(void);
+
+#;
+#! @brief free's a DSA_SIG stucture and it's components ;
+#! The values are erased before the memory is returned to the system.;
+#! @param sig a pointer to a DSA_SIG structure ;
+
+0abcd void DSA_SIG_free(DSA_SIG *sig);
+
+#;
+#! @brief decode a DSA signature using a ;
+#! Dss-Sig-Value structure as defined in RFC2459. ;
+#! @param a a pointer to a pointer containing an existing DSA sig, or ;
+#!          a pointer to NULL in which case the  DSA_SIG will be allocated;
+#! @param pp a pointer to a pointer to the DER encoded data, the pointer is modified to point to after the DER data;
+#! @param length length of the DER encoded input buffer;
+#! @return A newly allocated and populated DSA_SIG structure or NULL on error;
+#! @note Use DSA_SIG_free to release the returned object ;
+
+0abcd DSA_SIG * d2i_DSA_SIG(DSA_SIG **a, const unsigned char **pp, long length);
+
+#;
+#! @brief Convert a DSA_SIG structure to DER encoding;
+#! @param a the DSA_SIG structure to encode;
+#! @param pp a pointer to a buffer in which to write the signature;
+#! - *pp may be NULL in which case a buffer is allocated internally;
+#! -  pp may be NULL in which case only the length is calculated;
+#! - The calling application should free internally allocated  memory using ; 
+#! free or an equivalent function.;
+#! @return >0 The length of the DER encoded signature, otherwise an error occurred;
+
+0abcd int i2d_DSA_SIG(const DSA_SIG *a, unsigned char **pp);
+
+#;
+#! @brief x931 key derivation, needed only for formal testing of the X9.31 keygen code;
+#! @param rsa a pointer to the RSA structure to use/populate ;
+#! @param p1 prime p1 ;
+#! @param p2 prime p2 ;
+#! @param q1 prime q1 ;
+#! @param q2 prime q2 ;
+#! @param Xp1 Random seed for p1 ;
+#! @param Xp2 Random seed for p2 ;
+#! @param Xp  key for p1 ? ;
+#! @param Xq1 Random seed for q1 ;
+#! @param Xq2 Random seed for q2 ;
+#! @param Xq  key for q1 ? ;
+#! @param e exponent ;
+#! @param cb a callback function which can be used to monitor progress ;
+#! @note This function is included solely for test purposes, if you think ;
+#! you need to use it, you are doing the wrong thing !;
+
+0abcd int RSA_X931_derive_ex(RSA *rsa, BIGNUM *p1, BIGNUM *p2, BIGNUM *q1,BIGNUM *q2,const BIGNUM *Xp1, const BIGNUM *Xp2, const BIGNUM *Xp,const BIGNUM *Xq1, const BIGNUM *Xq2, const BIGNUM *Xq,const BIGNUM *e, void *cb); 
+
+#;
+#! @brief Set a flag in the group so that d2i_ECPKParameters() will ;
+#! output named curve format rather than curve parameter format ;
+#! @param group the EC group behaviour to modify ;
+#! @param flag  0 (default) for curve parameters, 1 for named curve;
+
+0abcd void EC_GROUP_set_asn1_flag(EC_GROUP *group, int flag);
+
+
+#;
+#! @brief get the flags for a cipher context; 
+#! @param ctx the cipher context; 
+#! @return the flags data for this context; 
+#! @note Only added for formal FIPS testing of CFB1 modes; 
+#! - we know of no other time when this call would be needed; 
+ 
+0abcd unsigned long EVP_CIPHER_CTX_flags(const EVP_CIPHER_CTX *ctx); 
+ 
+#; 
+#! @brief set the flags for a cipher context; 
+#! @param ctx the cipher context; 
+#! @param flags the new flags; 
+#! @note  Only added for formal FIPS testing of CFB1 modes;  
+#! - we know of no other time when this call would be needed;  
+  
+0abcd void    EVP_CIPHER_CTX_set_flags(EVP_CIPHER_CTX *ctx, int flags); 
+
+#;
+#! @brief FIPS 140-3 compatible IV generator. ;
+#! Note that this generator returns at least 96 bit sequence ;
+#! guaranteed to not repeat for at least 2^32 iterations ;
+#! and it SHOULD be unique on each invocation ;
+#! As ICC has no retained state, we rely on the ;
+#! TRNG for the startup uniqueness ;
+#! @param aes_gcm_ctx an aes_gcm_ctx;
+#! @param ivlen the length of the iv;
+#! @param iv a >= 12 byte buffer to return unique values in ;
+#! @note ; 
+#! - IV Generation and AES_GCM share the same state structure ;
+#!   but are otherwise independent, so you can use the IV generator ;
+#!   without doing GCM, or vice-versa;
+#! - The bottom 8 bytes are a masked counter, non-recurring to 2^32 iterations;
+#! - The four bytes above the counter are initialized to "IBM " on the first ;
+#!   call and SHOULD be overwritten by an application specific tag before ;
+#!   the generated IV is used the first time ;
+#! @return 1 on success, 0 on failure (IV too short);
+
+0abcdE int AES_GCM_GenerateIV_NIST(AES_GCM_CTX *aes_gcm_ctx,int ivlen,unsigned char *iv);
+
+
+#;
+#! @brief  copy an EVP_CIPHER_CTX structure;
+#! @param  out pointer to a pre-allocated destination EVP_CIPHER_CTX;
+#! @param  in pointer to source EVP_CIPHER_CTX;
+#! @return ICC_OSSL_SUCCESS, ICC_OSSL_FAILURE;
+
+0abcdE   int  EVP_CIPHER_CTX_copy(EVP_CIPHER_CTX *out,const EVP_CIPHER_CTX *in);
+
+#;
+#! @brief Primality check on BIGNUMS, Miller-Rabin with help;
+#! @param a the prime to check;
+#! @param checks the number of rounds;
+#! @param ctx_passed working (scratch area) for calculations ;
+#! @param do_trial_division If set does a fast check on the first N primes before the Miller-Rabin rounds ;
+#! @param cb Callback function/progress checking NULL for ICC.;
+#! @return 1 on sucess ;
+#! @note For ICC platforms N is 2048, i.e. the first 2048 primes will be checked explicitly ;
+#! if do_trial_division is set ;
+#! - We do NOT recommend ICC consumers use this call, it's exposed for formal testing (FIPS) only ;
+
+0abcd int BN_is_prime_fasttest_ex(const BIGNUM *a, int checks, BN_CTX *ctx_passed,int do_trial_division, void *cb);
+
+#;
+#! @brief generate a pair of primes for RSA keygen ;
+#! @param Xp Target 'p' prime ;
+#! @param Xq Target 'q' prime ;
+#! @param bits target size of the desired primes ;
+#! @param ctx a BN_CTX for scratch space ;
+#! @return 1 on sucess;
+#! @note - We do NOT recommend ICC consumers use this call, it's exposed for formal testing (FIPS) only ;
+
+0abcd int BN_X931_generate_Xpq(BIGNUM *Xp, BIGNUM *Xq, int bits,BN_CTX * ctx);
+
+#;
+#! @brief generate an RSA prime from Xp;
+#! @param p target prime ;
+#! @param p1 intermediate prime 1 (may be NULL);
+#! @param p2 intermediate prime 2 (may be NULL);
+#! @param Xp1 first random component (may be NULL) ;
+#! @param Xp2 second random component (may be NULL);
+#! @param Xp seed random number (Must be present) ;
+#! @param e exponent ;
+#! @param ctx BN Context used for scratch space ;
+#! @param cb callback function, NULL ;
+
+0abcd int BN_X931_generate_prime_ex(BIGNUM *p, BIGNUM *p1, BIGNUM *p2, BIGNUM *Xp1, BIGNUM *Xp2,const BIGNUM *Xp,const BIGNUM *e, BN_CTX *ctx,void *cb);
+
+#;
+#! @brief Key wrap/unwrap function, Public API;
+#! @param in input buffer;
+#! @param inl length of input buffer;
+#! @param out output buffer (length of input +16);
+#! @param outl place to store the output length;
+#! @param key the AES key;
+#! @param kl Size of the AES key (bits);
+#! @param flags  ;
+#! - 1 Wrap ;
+#! - 2 Forward decrypt;
+#! - 4 Pad;
+#! @return 1 O.K., length of output in *outl;
+#! - 0 Parameter error;
+#! - 2 Unwrap mac mismatch;
+#! - 3 range error in input;
+#! - 4 Memory error;
+
+0abcdECMP int SP800_38F_KW(unsigned char *in, int inl, unsigned char *out, int *outl, unsigned char *key, int kl,unsigned int flags);
+
+#;
+#! @brief Context control for the EVP_PKEY functions;
+#! @param ctx a pointer to an EVP_PKEY_CTX;
+#! @param keytype The type of the underlying key;
+#! @param optype the operation type;
+#! @param cmd The command enum;
+#! @param p1 Input parameter;
+#! @param p2 pointer to any non-integer parameter;
+
+0abcd int EVP_PKEY_CTX_ctrl(EVP_PKEY_CTX *ctx, int keytype, int optype,int cmd, int p1, void *p2);
+
+#;
+#! @brief Enhanced signing for the EVP layer. Needed for PSS, DSA2 ;
+#! @param ctx A digest context ;
+#! @param pctx An optional pointer to an EVP_PKEY_CTX, this is actually;
+#!   a pointer into data internal to the EVP_PKEY object. If a pointer to;
+#!   NULL is passed in, the EVP_PKEY_CTX will be created during Init and;
+#!   the pointer passed back in this parameter. There is NO NEED to free;
+#!   this pointer as it'll be cleaned up with the EVP_PKEY. ;
+#!   This provides the handle to the object EVP_PKEY_CTX_ctrl needs ;
+#!   to set more exotic options;
+#! @param type The message digest to use;
+#! @param e Always NULL for ICC;
+#! @param pkey the EVP_PKEY object to use;
+#! @note EVP_SignUpdate() is the Update function for EVP_DigestSignInit;
+
+0abcdECMP int EVP_DigestSignInit(EVP_MD_CTX *ctx, EVP_PKEY_CTX **pctx,const EVP_MD *type, void *e, EVP_PKEY *pkey);
+
+#;
+#! @brief complete an enhanced EVP sign operation;
+#! @param ctx The message digest context ;
+#! @param sigret the buffer for the signature, which may be NULL in which ;
+#!    case the required size would come back in *siglen ;
+#! @param siglen a pointer to a location to hold the length of the signature ;
+
+0abcd int EVP_DigestSignFinal(EVP_MD_CTX *ctx,unsigned char *sigret, size_t *siglen);
+
+#;
+#! @brief Enhanced signature verification for the EVP layer.;
+#!  Needed for PSS, DSA2 ;
+#! @param ctx A digest context ;
+#! @param pctx An optional pointer to an EVP_PKEY_CTX, this is actually;
+#!   a pointer into data internal to the EVP_PKEY object. If a pointer to;
+#!   NULL is passed in, the EVP_PKEY_CTX will be created during Init and;
+#!   the pointer passed back in this parameter. There is NO NEED to free;
+#!   this pointer as it'll be cleaned up with the EVP_PKEY. ;
+#!   This provides the handle to the object EVP_PKEY_CTX_ctrl needs ;
+#!   to set more exotic options;
+#! @param type The message digest to use;
+#! @param e Always NULL for ICC;
+#! @param pkey the EVP_PKEY object to use;
+
+0abcdECMP int EVP_DigestVerifyInit(EVP_MD_CTX *ctx, EVP_PKEY_CTX **pctx,const EVP_MD *type, void *e, EVP_PKEY *pkey);
+
+#;
+#;
+#! @brief complete an enhanced EVP sign operation;
+#! @param ctx The message digest context ;
+#! @param sig the buffer containing the signature ;
+#! @param siglen the length of the signature ;
+
+0abcd int EVP_DigestVerifyFinal(EVP_MD_CTX *ctx,unsigned char *sig, size_t siglen);
+
+#;
+#! @brief return the type (NID) embedded in a PKEY object ;
+#! @param pkey the pkey to use;
+#! @return the NID;
+
+0abcd int EVP_PKEY_id(EVP_PKEY *pkey);
+
+#;
+#! @brief DER encode an EVP private key.;
+#! Generates binary asn.1., you may need to BASE64 after;
+#! @param a pointer to an EVP_PKEY private key;
+#! @param pp a pointer to a buffer to place the DER encoded data; 
+#!  - if *pp is NULL then a buffer will be allocated internally ;
+#!  - if pp is NULL then the length of the required buffer is returned ;
+#!  - The calling application should free internally allocated  memory using ;
+#!  free or an equivalent function.;
+#! @return  >0  The length of the DER encoding, otherwise an error occurred;
+#! @note    The DER encoded private key also contains a copy of the public key;
+
+0abcdE  int  i2d_PrivateKey(EVP_PKEY *a, unsigned char **pp);
+
+#;
+#! @brief DER encode an EVP public key;
+#! Generates binary asn.1., you may need to BASE64 after;
+#! @param a pointer to an EVP public key;
+#! @param pp A pointer to a buffer to hold the DER encoded data ;
+#! - if *pp is NULL then a buffer will be allocated internally ;
+#! - if  pp is NULL then the required buffer length will be returned;
+#! - The calling application should free internally allocated  memory using ;
+#! free or an equivalent function.;
+#! @return  >0 The length of the DER encoding, otherwise an error occurred;
+#! @note i2d_PUBKEY is the form that should be used ;
+
+0abcdE  int  i2d_PublicKey(EVP_PKEY *a, unsigned char **pp);
+
+#;
+#! @brief DER decode PKCS#1 data into an EVP_PKEY public key.;
+#! Expects binary asn.1., you may need to BASE64 first;
+#! @param a pointer to an EVP_PKEY public key;
+#! @param pp a pointer to a pointer to the DER encoded data.;
+#!        This value is updated to point one byte past the end of the input;
+#! @param length length of the input data;
+#! @return a pointer to an EVP_PKEY when it is successful or NULL on failure; 
+#! @note Use EVP_PKEY_free to free the returned object ;
+
+0abcdE  EVP_PKEY *  d2i_PUBKEY(EVP_PKEY **a,const unsigned char **pp,long length);
+
+#;
+#! @brief DER encode an EVP public key;
+#! Generates binary asn.1., you may need to BASE64 after;
+#! @param a pointer to an EVP public key;
+#! @param pp A pointer to a buffer to hold the DER encoded data ;
+#! - if *pp is NULL then a buffer will be allocated internally ;
+#! - if  pp is NULL then the required buffer length will be returned;
+#! - The calling application should free internally allocated  memory using ;
+#! free or an equivalent function.;
+#! @return  >0 The length of the DER encoding, otherwise an error occurred;
+#! @note i2d_PUBKEY is the form that should be used ;
+
+0abcdE  int  i2d_PUBKEY(EVP_PKEY *a, unsigned char **pp);
+
+#;
+#!@brief performs a public key encryption operation using ectx.;
+#!@param ectx the EVP_PKEY ctx to use;
+#!@param out Output buffer ;
+#!@param outlen Will hold the amount of data placed into out ;
+#!@param in The input buffer ;
+#!@param inlen the length of the input data ;
+#!@return 1 on sucess;
+
+0abcdEM int EVP_PKEY_encrypt_new(EVP_PKEY_CTX *ectx, unsigned char *out, size_t *outlen, const unsigned char *in, size_t inlen);
+
+#;
+#!@brief performs a public key decryption operation using ectx.;
+#!@param ectx the EVP_PKEY ctx to use;
+#!@param out Output buffer ;
+#!@param outlen Will hold the amount of data placed into out ;
+#!@param in The input buffer ;
+#!@param inlen the length of the input data ;
+#!@return 1 on sucess;
+
+0abcdEM int EVP_PKEY_decrypt_new(EVP_PKEY_CTX *ectx, unsigned char *out, size_t *outlen, const unsigned char *in, size_t inlen);
+
+#;
+#!@brief Precompute parts of the signing operation;
+#!@param  eckey  EC_KEY object containing a private EC key;
+#!@param  ctx_in    BN_CTX object (optional);
+#!@param  kinvp   BIGNUM pointer for the inverse of k;
+#!@param  rp     BIGNUM pointer for x coordinate of k * generator;
+#!@return 1 on success and 0 otherwise;
+
+0abcdE int ECDSA_sign_setup(EC_KEY *eckey, BN_CTX *ctx_in, BIGNUM **kinvp, BIGNUM **rp);
+
+0abcdE ECDSA_SIG *ECDSA_do_sign_ex(const unsigned char *dgst, int dlen,const BIGNUM *kinv, const BIGNUM *rp, EC_KEY *eckey);
+
+0abcdE int ECDSA_do_verify(const unsigned char *dgst, int dgst_len, const ECDSA_SIG *sig, EC_KEY *eckey);
+
+#;
+#! @brief Allocate a new EVP_PKEY_CTX ;
+#! @param pkey An EVP_PKEY to serve as a template for the new context ;
+#! @param e Always NULL in the ICC case. (ENGINE handle) ;
+#! @return NULL on failure, otherwise a pointer to an EVP_PKEY_CTX
+#! structure;
+
+0abcdE  EVP_PKEY_CTX *EVP_PKEY_CTX_new(EVP_PKEY *pkey, void *e);
+
+#;
+#! @brief Free an EVP_PKEY_CTX structure ;
+#! @param pkey_ctx a pointer to the context to free ;
+
+0abcd  void EVP_PKEY_CTX_free(EVP_PKEY_CTX *pkey_ctx);
+
+#;
+#! @brief Check a DH public key for consistancy ;
+#! @param dh The base key ;
+#! @param pub_key The public key which should have been generated from a key withe same paramaters ;
+#! @param codes A pointer to the possible error codes;
+
+0abcd int DH_check_pub_key(const DH *dh, const BIGNUM *pub_key, int *codes);
+
+#! @brief Generic password based encryption. Derives a key and IV from various parameters. ;
+#! @param type type is the cipher to derive the key and IV for ;
+#! @param md is the message digest to use ;
+#! @param salt is used as a salt in the derivation, 8 byte buffer or NULL;
+#! @param data is a buffer containing datal bytes which is used to derive the keying data.;
+#! @param datal is the length of the data buffer;
+#! @param count is the iteration count to use;
+#! @param key a pointer to the key buffer ;
+#! @param iv a pointer to the iv buffer ;
+#! @return the size of the derived key in bytes ;
+
+0abcdE int EVP_BytesToKey(const EVP_CIPHER *type,const EVP_MD *md,const unsigned char *salt,const unsigned char *data, int datal, int count,unsigned char *key,unsigned char *iv);
+
+#! @brief converts the text string s into an ASN1_OBJECT structure.;
+#! @param s The text string to convert ;
+#! @param no_name  0 long names and short names will be interpreted as well as numerical forms. 1 only the numerical form is acceptable.;
+#! @return an ASN1_OBJECT or NULL on failure ;
+#! encountered in practice. ;
+
+0abcdE ASN1_OBJECT * OBJ_txt2obj(const char *s, int no_name);
+
+#! @brief return the curve name (NID) of the given EC_GROUP ;
+#! @param group the EC group to use ;
+#! @return The NID of the curve ;
+0abcd int EC_GROUP_get_curve_name(const EC_GROUP *group);
+
+#! @brief Return the flags associated with the specified cipher ;
+#! @param e The cipher to use ;
+#! @return The flags ;
+
+0abcd int EVP_CIPHER_flags(EVP_CIPHER *e);
+
+#! @brief  Decodes a EC_POINT from a octet string ;
+#!  @param  group  underlying EC_GROUP object ;
+#!  @param  p      EC_POINT object ;
+#!  @param  buf    memory buffer with the encoded ec point ;
+#!  @param  len    length of the encoded ec point ;
+#!  @param  ctx    BN_CTX object (optional) ;
+#!  @return 1 on success and 0 if an error occured ;
+
+0abcd int EC_POINT_oct2point(const EC_GROUP *group, EC_POINT *p,const unsigned char *buf, size_t len, BN_CTX *ctx);
+
+#! @brief Encodes a EC_POINT object to a octet string ;
+#! @param  group  underlying EC_GROUP object ;
+#! @param  p      EC_POINT object ;
+#! @param  form   point conversion form ;
+#! @param  buf    memory buffer for the result. If NULL the function returns ;
+required buffer size. ;
+#! @param  len    length of the memory buffer ;
+#! @param  ctx    BN_CTX object (optional) ;
+#! @return the length of the encoded octet string or 0 if an error occurred ;
+ 
+0abcd size_t EC_POINT_point2oct(const EC_GROUP *group, const EC_POINT *p,int form,unsigned char *buf, size_t len, BN_CTX *ctx);
+
+#! @brief Sort the EVP Ciphers ;
+#! @param fn sort function callback;
+#! @param arg application specific data ;
+
+0abcd void EVP_CIPHER_do_all_sorted(void (*fn)(const void *ciph, const char *from,const char *to, void *x), void *arg);
+
+#! @brief Sort the EVP Digests ;
+#! @param fn sort function callback ;
+#! @param arg pointer to application specific data ;
+
+0abcd void EVP_MD_do_all_sorted(void (*fn)(const void *ciph, const char *from,const char *to, void *x), void *arg);
+
+#! @brief get a list of the EC curves supported by OpenSSL ;
+#! @param r a pointer to an array to hold the curve information ;
+#! @param nitems size of r (only the first nitems will be returned);
+#! @return the number of items ;
+#! @note (NULL,0) will result in the total number of curves being returned;
+
+0abcd size_t EC_get_builtin_curves(EC_builtin_curve *r, size_t nitems);
+
+#! @brief initializes a public key algorithm context using key pkey for a signing operation ;
+#! @param pctx The EVP_PKEY_CTX to use ;
+#! @return 1 on sucess, 0 fail, -2 operation not supported by algorithm ;
+
+0abcdECPM int EVP_PKEY_sign_init(EVP_PKEY_CTX *pctx);
+
+#! @brief performs a public key signing operation using pctx ;
+#! @param pctx The EVP_PKEY_CTX to use ;
+#! @param sig The signature buffer. If NULL the required size is written to *signlen ;
+#! @param siglen points to the space to hold the signature length ;
+#! @param tbs data to be signed ;
+#! @param tbslen length of data to be signed ;
+
+0abcd int EVP_PKEY_sign(EVP_PKEY_CTX *pctx,unsigned char *sig, size_t *siglen,const unsigned char *tbs, size_t tbslen);
+
+#! @brief initializes a public key algorithm context using key pkey for a decryption operation.;
+#! @param pctx The EVP_PKEY_CTX to use ;
+#! @return 1 on sucess, 0 fail, -2 operation not supported by algorithm ;
+
+0abcd int EVP_PKEY_decrypt_init(EVP_PKEY_CTX *pctx);
+
+#! @brief initializes a public key algorithm context using key pkey for a decryption operation.;
+#! @param pctx The EVP_PKEY_CTX to use ;
+#! @return @return 1 on sucess, 0 fail, -2 operation not supported by algorithm ;
+
+0abcd int EVP_PKEY_encrypt_init(EVP_PKEY_CTX *pctx);
+
+
+#! @brief initializes a public key algorithm context using key pkey for a verify recover operation.;
+#! @param pctx the EVP_PKEY_CTX to use;
+
+0abcd int EVP_PKEY_verify_recover_init(EVP_PKEY_CTX *pctx);
+
+#! @brief recovers signed data using ctx.;
+#! @param pctx The EVP_PKEY_CTX to use ;
+#! @param rout buffer for the recovered data. If NULL the length is returned in *routlen ;
+#! @param routlen the length of the recovered data;
+#! @param sig The signature;
+#! @param siglen the signature length ;
+#! @return 1 on sucess, 0 fail, -2 operation not supported by algorithm ;
+
+0abcd int EVP_PKEY_verify_recover(EVP_PKEY_CTX *pctx,unsigned char *rout, size_t *routlen,const unsigned char *sig, size_t siglen);
+
+#! @brief returns a bignum constant of value 1;
+#! @return as described ;
+
+0abcd const BIGNUM *BN_value_one(void);
+
+#! @brief set a bignum to the value given ;
+#! @param a The BIGNUM to set ;
+#! @param w the value to set the bignum to ;
+#! @return The set value or -1L on error ;
+
+0abcd int BN_set_word(BIGNUM *a, unsigned long w);
+
+#! @brief get the value of a BIGNUM   ;
+#! @param a The BIGNUM to get the value from ;
+#! @return The set value or -1L on error ;
+
+0abcd unsigned long BN_get_word(BIGNUM *a);
+
+#! @brief free an ASN1_OBJECT ;
+#! @param a the object to free ;
+
+0abcd void ASN1_OBJECT_free(ASN1_OBJECT *a);
+
+#;
+#!@brief converts the ASN1_OBJECT a into a textual representation.;
+#!@param buf a buffer to hold the test string ;
+#!@param buf_len the length of the provided buffer;
+#!@param a the ANS1_OBJECT to convert ;
+#!@param no_name If no_name is 0 then if the object has a long or short name ;
+#!       then that will be used, otherwise the numerical form will be used.;
+#!       If no_name is 1 then the numerical form will always be used. ;
+#!@return The length of the output ;
+#!@note is awkward and messy to use ;
+#! it doesn't follow the convention of other OpenSSL functions where;
+#! the buffer can be set to NULL to determine the amount of data that;
+#! should be written.  Instead buf must point to a valid buffer ;
+#! and buf_len should be set to a positive value.;
+#! A buffer length of 80 should be more than enough to handle any OID;
+
+0abcd int OBJ_obj2txt(char *buf, int buf_len, const ASN1_OBJECT *a, int no_name);
+
+#;
+#! @brief Create the data object used to contain PBE2 configuration ;
+#! And yes, it's ugly, even the OpenSSL comments say it's ugly;
+#! @param cipher The EVP_CIPHER object to be used ;
+#! @param iter the number of iterations of the key generation to run;
+#! @param salt the PBE salt data;
+#! @param saltlen the length of the salt ;
+#! @param aiv The IV for the cipher algorithm, this needs to match during ;
+#! encrypt and decrypt;
+#! @param prf_nid - must match the specification for use with the cipher used ;
+#! if in doubt pass in -1 which sets the default hmacWithSHA256 ;
+#! @return An X509_ALGOR structure (Blob) containing the algorithm configuration; 
+
+0abcdE X509_ALGOR *PKCS5_pbe2_set_iv(const EVP_CIPHER *cipher, int iter,unsigned char *salt, int saltlen,unsigned char *aiv, int prf_nid);
+
+#! @brief PKEY keygen initialization ;
+#! @param ctx A pointer to an EVP_PKEY_CTX;
+#! @return 1 on sucess;
+
+0abcdE int EVP_PKEY_keygen_init(EVP_PKEY_CTX *ctx);
+
+#! @brief Perform PKEY keygen ;
+#! @param ctx a pointer to an EVP_PKEY_CTX;
+#! @param ppkey a pointer to an EVP_PKEY, may point to a NULL EVP_PKEY ;
+#!           in which case one will be allocated, or an EVP_PKEY of ;
+#!           some type, which will determien the keygen method ;
+#! @return 1 on sucess;
+#! @note EVP_PKEY_CTX_ctrl is often called between ;
+#! EVP_PKEY_keygen_init and EVP_PKEY_keygen to set the object characteristics ;
+
+0abcdEMPC int EVP_PKEY_keygen(EVP_PKEY_CTX *ctx, EVP_PKEY **ppkey);
+
+#! @brief PKEY parameter generation initialization ;
+#! @param ctx a pointer to an EVP_PKEY_CTX;
+#! @return 1 on sucess;
+
+0abcdE  int EVP_PKEY_paramgen_init(EVP_PKEY_CTX *ctx);
+
+#! @brief Perform PKEY parameter generation ;
+#! @param ctx a pointer to an EVP_PKEY_CTX;
+#! @param ppkey a pointer to an EVP_PKEY, may point to a NULL EVP_PKEY ;
+#!           in which case one will be allocated, or an EVP_PKEY of ;
+#!           some type, which will determien the keygen method ;
+#! @return 1 on sucess;
+#! @note EVP_PKEY_CTX_ctrl is often called between ;
+#! EVP_PKEY_keygen_init and EVP_PKEY_keygen to set the object characteristics ;
+
+0abcdE  int EVP_PKEY_paramgen(EVP_PKEY_CTX *ctx, EVP_PKEY **ppkey);
+
+#! @brief Initialize PKEY key derivation ;
+#! @param ctx a pointer to an EVP_PKEY_CTX;
+#! @return 1 on sucess;
+
+0abcdCEMP int EVP_PKEY_derive_init(EVP_PKEY_CTX *ctx);
+
+#! @brief Set the peer key for PKEY key derivation ;
+#! @param ctx a pointer to an EVP_PKEY_CTX;
+#! @param peer a pointer to the peer key. Must contain a public key;
+#! @return 1 on sucess;
+
+0abcdE int EVP_PKEY_derive_set_peer(EVP_PKEY_CTX *ctx, EVP_PKEY *peer);
+
+#! @brief Perform a key derivation operation ;
+#! @param ctx a pointer to an EVP_PKEY_CTX;
+#! @param key The returned key. If NULL *keylen will contain the ;
+#!        required size on return ;
+#! @param keylen a pointer to the length of the final key ;
+#! @note This is ONLY known to work with EC curve X25519 ;
+
+0abcdE int EVP_PKEY_derive(EVP_PKEY_CTX *ctx, unsigned char *key, size_t *keylen);
+
+#! @brief Create a new PKEY_CTX of the type determined by id ;
+#! @param id the NID of the desired object ;
+#! @param e always NULL for ICC;
+#! @return NULL or an EVP_PKEY_CTX set up for the operations ;
+#!         appropriate to id;
+
+0abcdE EVP_PKEY_CTX * EVP_PKEY_CTX_new_id(int id,void *e);
+
+#! @brief initializes a public key algorithm context using key pkey for a verify operation.;
+#! @param pctx the EVP_PKEY_CTX to use;
+
+0abcdECMP int EVP_PKEY_verify_init(EVP_PKEY_CTX *pctx);
+
+#! @brief performs a public key verify operation using pctx ;
+#! @param pctx The EVP_PKEY_CTX to use ;
+#! @param sig The signature buffer. If NULL the required size is written to *signlen ;
+#! @param siglen the signature length ;
+#! @param tbs data to be verified ;
+#! @param tbslen length of the data ;
+
+0abcdE int EVP_PKEY_verify(EVP_PKEY_CTX *pctx,const unsigned char *sig,size_t siglen,const unsigned char *tbs, size_t tbslen);
+
+#! @brief extracts the private key from a DH structure;
+#! @param dh a pointer to the DH structure containing the private key;
+#! @return a pointer to the BIGNUM containing the private key within the DH;
+#! structure passed in;
+#! - Note: This routine DOES NOT ALLOCATE A NEW BIGNUM;
+
+0abcd     const BIGNUM * DH_get_PrivateKey(const DH *dh);
+
+#! @brief Selectively extract DH parameters as BIGNUMS ;
+#! @param dh the DH key;
+#! @param p Where to return p;
+#! @param q Where to return q;
+#! @param g Where to return g;
+#! @note  Note if (p,q,g) is NULL, that parameter is not returned ;
+#!        *(p,q,g) may be NULL, in which case a new *(p,q,g) is allocated;
+
+0abcd void DH_get0_pqg(const DH *dh,const BIGNUM **p, const BIGNUM **q, const BIGNUM **g);
+
+#! @brief Selectively set DH parameters from BIGNUMS ;
+#! @param dh the DH key;
+#! @param p A pointer to p, or NULL;              
+#! @param q A pointer to q, or NULL;              
+#! @param g A pointer to g, or NULL;
+#! @return 1 on sucess ;
+
+0abcdE int DH_set0_pqg(DH *dh, BIGNUM *p, BIGNUM *q, BIGNUM *g);
+
+#! @brief Replacement for DH_generate_params;
+#! @param dh A pre-existing DH key ;
+#! @param prime_len the length of the generated key ;
+#! @param generator the small prime used to seed the generation ;
+#! @param cb unused in ICC ; 
+
+0abcdE int dh_builtin_genparams_with_q(DH *dh, int prime_len, int generator,void *cb);
+
+#! @brief PBKDF2 HMAC function ;
+#! @param pass the passphrase ;
+#! @param passlen the length of the passphrase;
+#! @param salt The salt, which should at LEAST be database unique;
+#! @param saltlen The length of the salt;
+#! @param iters The iteration count. Larger == more compute time and harder to crack;
+#! @param digest The digest function to use. Return from EVP_get_digestbyname();
+#! @param keylen The desired length of the output, if 0 it will be set to the digest length;
+#! @param out The output buffer - at least keylen bytes long;
+#! @return 1 on sucess;
+
+0abcdECMP int PKCS5_PBKDF2_HMAC(const char *pass, int passlen, const unsigned char *salt, int saltlen, int iters, const EVP_MD *digest, int keylen, unsigned char *out);
+
+#! @brief set the public key from the EC key inside an EVP_PKEY ;
+#! @param pkey the EVP_PKEY containing the EC_KEY ;
+#! @param pt The buffer containing the point data ;
+#! @param ptlen the length of the data in the buffer ;
+#! @return 1 on success, 0 otherwise ;
+
+0abcdE int EVP_PKEY_set1_tls_encodedpoint(EVP_PKEY *pkey,const unsigned char *pt, size_t ptlen);
+
+#! @brief get the public key from the EC key inside an EVP_PKEY ;
+#! @param pkey the EVP_PKEY containing the EC_KEY ;
+#! @param ppt A pointer to the buffer to hold the public key. ;
+#!            If *pp is NULL the buffer will be allocated; 
+#! @return The size of the data copied to the buffer ;
+
+0abcdE size_t EVP_PKEY_get1_tls_encodedpoint(EVP_PKEY *pkey, unsigned char **ppt);
+
+#! @brief one-shot Digest and Sign ;
+#! @param md_ctx A message digest context ;
+#! @param sigret a buffer for the generated signature ;
+#! @param siglen somewhere to store the signature length ;
+#! @param tbs data to be signed ;
+#! @param tbslen length of data to be signed;
+#! @return 1 on success;
+
+0abcdE int EVP_DigestSign(EVP_MD_CTX *md_ctx, unsigned char *sigret, size_t *siglen, const unsigned char *tbs, size_t tbslen);
+
+#! @brief one-shot Digest and Vign ;
+#! @param md_ctx A message digest context ;
+#! @param sigret a buffer containing the signature to verify;
+#! @param siglen the signature length ;
+#! @param tbs data that was signed ;
+#! @param tbslen length of the data that was signed;
+#! @return 1 on success;
+
+0abcdE int EVP_DigestVerify(EVP_MD_CTX *md_ctx, const unsigned char *sigret, size_t siglen, const unsigned char *tbs, size_t tbslen);
+
+#! @brief set configuration for EVP_PKEY_CTX operations ;
+#! @param pctx a pointer to an already created EVP_PKEY_CTX ;
+#! @param type a string describing the type of the configuration ;
+#! @param value a string describing the value of the setting ;
+#! @return 1 on success ;
+#! @note It appears that some operations are only available via this API ;
+ 
+0abcdE int EVP_PKEY_CTX_ctrl_str(EVP_PKEY_CTX *pctx,const char *type,const char *value);
+
+#! @brief return the pointer to the iv field for a cipher ;
+#! @param ctx a cipher context pointer;
+#! @return the internal pointer to the iv within the context ;
+#! @note You can access the iv to change the contents, not recommended but needed for some FIPS tests ;
+#! -     The compiler may complain;
+
+0abcd const unsigned char * EVP_CIPHER_CTX_iv(const EVP_CIPHER_CTX *ctx);
+
+#! @brief allocates a new PKEY of the supplied type and partly initializes it from the supplied data;
+#! @param type The NID of the algorithm;
+#! @param e NULL;
+#! @param priv The private key data ;
+#! @param len The length of the data ;
+#! @return an EVP_PKEY or NULL;
+#! @note Only works for some algorithms Poly1305,Siphash, ED25519, ED448 possibly others ;
+
+0abcdE EVP_PKEY *EVP_PKEY_new_raw_private_key(int type, void *e,const unsigned char *priv,size_t len);
+
+#! @brief allocates a new PKEY of the supplied type and partly initializes it from the supplied data;
+#! @param type The NID of the algorithm;
+#! @param e NULL ;
+#! @param pub The public key data ;
+#! @param len The length of the data ;
+#! @return an EVP_PKEY pointer or NULL;
+#! @note Only works for some algorithms, ED25519, ED448 possibly others ;
+
+0abcdE EVP_PKEY *EVP_PKEY_new_raw_public_key(int type, void *e, const unsigned char *pub,size_t len);
+
+#! @brief extracts the raw private key data from an EVP_PKEY ;
+#! @param pkey a pointer to an EVP_PKEY containing the private key ;
+#! @param priv Buffer to hold the extracted key. ;
+#! @param len pointer to a location to hold the length of the extract key;
+#! @return 1 on success;
+#! @note Only works with some algorithms. ;
+#! - If priv is NULL *len will hold the required buffer length on return ;
+
+0abcd int EVP_PKEY_get_raw_private_key(const EVP_PKEY *pkey, unsigned char *priv, size_t *len);
+
+#! @brief extracts the raw public key data from an EVP_PKEY ;
+#! @param pkey a pointer to an EVP_PKEY containing the private key ;
+#! @param pub Buffer to hold the extracted key. ;
+#! @param len pointer to a location to hold the length of the extract key;
+#! @return 1 on success;
+#! @note Only works with some algorithms. ;
+#! - If pub is NULL *len will hold the required buffer length on return ;
+
+0abcd int EVP_PKEY_get_raw_public_key(const EVP_PKEY *pkey, unsigned char *pub,size_t *len);
+
+#! @brief allocates a new PKEY  and partly initializes it from the supplied data;
+#! @param e NULL;
+#! @param priv the buffer holding the raw private key ;
+#! @param len the length of the supplied key;
+#! @param cipher The CMAC cipher;
+#! @return an EVP_PKEY pointer or NULL;
+#! @note doesn't work with all algorithms ;
+
+0abcdE EVP_PKEY *EVP_PKEY_new_CMAC_key(void *e, const unsigned char *priv,size_t len, const EVP_CIPHER *cipher);
+
+#! @brief Interfaces to extendable-output functions, XOFs, such as SHAKE128 and SHAKE256.; 
+#! It retrieves the digest value from ctx and places it in len-sized md. ;
+#! After calling this function no additional calls to EVP_DigestUpdate() can be made;
+#! but EVP_DigestInit() can be called to initialize a new operation.;
+#! @param mdctx pointer to a prexisting, initialized digest context;
+#! @param md buffer for the output which must be at least len long ;
+#! @param len length of output;
+#! @return 1 on sucess 0 on failure;
+#! Unstable on Z;
+
+0abcdE int EVP_DigestFinalXOF(EVP_MD_CTX *mdctx, unsigned char *md, size_t len);
+
+#! @brief retrieves a pointer to the EVP_PKEY embedded in an EVP_PKEY_CTX ;
+#! @param cctx pointer to the EVP_PKEY_CTX , do not free;
+#! @return a pointer to an EVP_PKEY or NULL on failure ;
+
+0abcd EVP_PKEY * EVP_PKEY_CTX_get0_pkey(EVP_PKEY_CTX *cctx);
+
+#! @brief TLS1.3 HKDF extract phrase ;
+#! @param evp_md an EVP_MD pointer ;
+#! @param salt a pointer to the salt buffer ;
+#! @param salt_len length of the salt ;
+#! @param key a pointer to the key ;
+#! @param key_len length of the key;
+#! @param prk buffer for the pseudo-random key which is the return value from this function ;
+#! @param prk_len pointer to the value to hold the length of the returned prk ;
+#! @return prk or NULL on failure ;
+
+# 0abM unsigned char *HKDF_Extract(const EVP_MD *evp_md,const unsigned char *salt, size_t salt_len,const unsigned char *key, size_t key_len,unsigned char *prk, size_t *prk_len);
+
+#! @brief TLS1.3 HKDF expand phase ;
+#! @param evp_md an EVP_MD pointer ;
+#! @param prk buffer for the pseudo-random key ;
+#! @param prk_len the length of the prk ;
+#! @param data the data buffer ;
+#! @param data_len the length of the data;
+#! @param okm output keying material (the result) ;
+#! @param okm_len the length of okm ;
+#! @return okm or NULL on failure ;
+
+# 0abM unsigned char *HKDF_Expand(const EVP_MD *evp_md,const unsigned char *prk, size_t prk_len,const unsigned char *data, size_t data_len,unsigned char *okm, size_t okm_len);
+
+#! @brief TLS1.3 HKDF ;
+#! @param evp_md an EVP_MD pointer ;
+#! @param salt a pointer to the salt buffer ;
+#! @param salt_len length of the salt ;
+#! @param key a pointer to the key ;
+#! @param key_len length of the key;
+#! @param okm output keying material (the result) ;
+#! @param okm_len the length of okm ;
+#! @return okm or NULL on failure ;
+
+# abEM unsigned char *HKDF(const EVP_MD *evp_md,const unsigned char *salt, size_t salt_len,const unsigned char *key, size_t key_len,const unsigned char *data, size_t data_len,unsigned char *okm, size_t okm_len);
+
+#! @brief paramgen2 Compatible with DSA2;
+#! @param The dsa key to generate the parameters in ;
+#! @param L the L parameter (length of P in bits);
+#! @param N the N parameter (length of Q in bits);
+#! @param evpmd the internal hash function to be used ;
+#! @param seed_in The seed PRIME, i.e. Q;
+#! @param seed_len The length of the seed prime;
+#! @param idx Index (0) ;
+#! @param seed_out the seed prime used (useful if seed_in was NULL for example) ;
+#! @param counter_ret a pointer to the counter param ;
+#! @param h_ret a pointer to the H param ;
+#! @param Callback function, leave as NULL for ICC;
+# Removed because it's reachable via EVP_PKEY_paramgen, EVP_PKEY_keygen IFF ; 
+# you get verything right ;
+0abcdEC int dsa_builtin_paramgen2(DSA *ret, size_t L, size_t N,const EVP_MD *evpmd, const unsigned char *seed_in, size_t seed_len, int idx, unsigned char *seed_out, int *counter_ret, unsigned long *h_ret, void *cb);
+
+#;
+#! @brief computes the shared secret from the private DH value;
+#!       in dh and the other party's public value in pub_key and stores it in;
+#!       key. key must point to DH_size bytes of memory.
+#!       Differs from DH_compute key in that the resulting key is leading 0 padded to size;
+#! @param key pointer to a buffer to hold the generated shared secret;
+#! @param pub_key a pointer to the other parties public key;
+#! @param dh a pointer to the DH structure you wish to use;
+#! @return The size of the shared secret key on success, -1 on failure;
+
+0abcdEMP  int DH_compute_key_padded(unsigned char *key,BIGNUM *pub_key,DH *dh);
+
+#;
+#! @brief allows us to set an EC public key with external data ;
+#! @param key an existing EC key. Public key need not be set yet ;
+#! @param x new x coord;
+#! @param y new y coord;
+#! @return 1 on success, 0 otherwise ;
+#! @note added to make FIPS compliance testing easier;
+
+0abcd int EC_KEY_set_public_key_affine_coordinates(EC_KEY *key, BIGNUM *x,BIGNUM *y);
+
+#;
+#! @brief set EC key flags ;
+#! @param eckey the EC key ;
+#! @param flags the flags ;
+
+0abcd void EC_KEY_set_flags(EC_KEY *eckey, int flags);
+#;
+#! @brief Create a new EC_GROUP ;
+#! @param nid the ID of the EC curve ;
+#! @return a new group or NULL;
+
+0abcd EC_GROUP * EC_GROUP_new_by_curve_name(int nid);
+
+#;
+#! @brief One shot HKDF ;
+#! @param evp_md message digest to use ;
+#! @param salt nonce ;
+#! @param salt_len length of salt ;
+#! @param key the HKDF key ;
+#! @param key_len lenth of key ;
+#! @param info additional data ; 
+#! @param info_len length of info ;
+#! @param okm output keying material (generated output) ;
+#! @param okm_len desired length of okm ;
+
+0abcdP unsigned char *HKDF(const EVP_MD *evp_md, const unsigned char *salt, size_t salt_len, const unsigned char *key, size_t key_len, const unsigned char *info, size_t info_len, unsigned char *okm, size_t okm_len);
+
+#;
+#! @brief HKDF key extract phase;
+#! @param evp_md message digest to use ;
+#! @param salt nonce ;
+#! @param salt_len length of salt ;
+#! @param key the HKDF key ;
+#! @param key_len lenth of key ;
+#! @param prk output intermediate keying material (generated output) ;
+#! @param prk_len desired length of prk ;
+
+0abcdP unsigned char *HKDF_Extract(const EVP_MD *evp_md,const unsigned char *salt, size_t salt_len,const unsigned char *key, size_t key_len,unsigned char *prk, size_t *prk_len);
+
+#;
+#! @brief HKDF expand phase ;
+#! @param evp_md message digest to use ;
+#! @param prk the intermediate key ;
+#! @param prk_len lenth of key ;
+#! @param info additional data ; 
+#! @param info_len length of info ;
+#! @param okm output keying material (generated output) ;
+#! @param okm_len desired length of okm ;
+
+0abcdP unsigned char *HKDF_Expand(const EVP_MD *evp_md,const unsigned char *prk, size_t prk_len,const unsigned char *info, size_t info_len,unsigned char *okm, size_t okm_len);
+
+#;
+#! @brief check the g parameter in a set of DSA params ;
+#! @param dsa a pointer to a valid DSA object;
+#! @return 1 if it checks out, 0 on fail, -1 on couldn't test ;
+#! @note Needed for FIPS;
+
+0abcd int dsa_paramgen_check_g(DSA *dsa);
+
+#;
+#! @brief generate an RSA key ;
+#! @param rsa a pre-existing RSA object ;
+#! @param bits the size of the key ;
+#! @param e the exponent ;
+#! @param cb A callback to indicate progress, leave as NULL ;
+#! @note This gives the option of having some of the key parameters precalculated;
+#! @note - no it doesn't. It's totally useless;
+
+0abcdEPMC int RSA_generate_key_ex(RSA *rsa, int bits, const BIGNUM *e, void *cb);
+
+#;
+#! @brief check a BIGNUM for == 0; 
+#! @param a the BIGNUM to check ;
+
+0abcd int BN_is_zero(const BIGNUM *a);
+
+#;
+#! @brief Print verbose OpenSSL errors to a file descriptor ;
+#! @param fp File descriptor (stdout,stderr);
+#! @note Useful for debug as it also dumps file and line #;
+#!       NOT recommended for production use;
+
+0abcd void ERR_print_errors_fp(FILE *fp);
+
+#;
+#! @brief Fix zeros in RSA Private Key DER encoding CRT components.;
+#!        May be useful where RSA Private Key is stripped of CRT components leaving only modulus and private exponent.;
+#!        This is only provided as a last resort where the CRT components cannot be provided.;
+#!        CRT components shall be recalculated if the modulus and private and public exponents are provided.;
+#!        RSA blinding requires the public exponent 'e'. If this is not present and allowDisableBlinding = 1 then blinding is disabled;
+#! @return ICC_OSSL_SUCCESS if all fixups succeeded, otherwise key should not be used.;
+#! @param pri Internal rsa private key,;
+#! @param pub Optional internal rsa public key (to provide public exponent) - NULL if not supplied;
+#! @param allowDisableBlinding = 0 to require blinding - non-zero to allow blinding to be disabled if public exponent is not found.;
+#! @note Modifies internal RSA structure which must match the library it originally came from.;
+#!       Call must be library matched to the ICC librarie 'rsa' originated from.;
+
+0abcd int RSA_FixEncodingZeros(RSA* pri, const RSA* pub, int allowDisableBlinding);
+
+#;
+#! @brief Run the internal FIPS integrity check ;
+#! @param status pointer to an ICC_STATUS structure ;
+#! @return ICC_OK, ICC_ERROR, ICC_WARNING ;
+#! @note ICC_WARNING will ONLY be returned if we can't create file descriptors ;
+#!       to open the files needed to perform verification ;
+#!       The application should either close files/sockets and retry ;
+#!       or exit in this corner case;
+#!       - If this call fails the ICC API will shut down;
+
+0abcdP int IntegrityCheck(ICC_STATUS * status);
+
+#! @brief return a list of platform specific accelation helpers ;
+#! for use by Java Security (only) ;
+
+0abcdJ void *OS_helpers(void);
+
+
+#;
+#;
+# WARNING WARNING WARNING ;
+# The entries below here are generated in an extra library and;
+# NOT in gskit_crypto ;
+# The useful ones should be migrated WHEN we FIPS certify so that;
+# consistent availability can be guaranteed ;
+#;
+#;

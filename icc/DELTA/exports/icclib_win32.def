@@ -1,0 +1,8 @@
+DESCRIPTION 'DELTA EXPORT FILE'
+
+EXPORTS
+Delta_T
+Delta_res
+Delta2Time
+Delta_spanT
+Delta_spanC

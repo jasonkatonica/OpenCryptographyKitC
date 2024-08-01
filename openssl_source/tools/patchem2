@@ -1,0 +1,10 @@
+# Scriptlet to apply a set of patches in order
+# name patches 000_<name>.patch -> 999_<name>.patch
+#
+
+for file in $1/*.patch ; do
+      echo "Applying patch $file"
+		patch -p1 < $file
+      echo " "
+done
+	

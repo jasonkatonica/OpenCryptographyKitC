@@ -1,0 +1,12 @@
+#DESCRIPTION 'DELTA EXPORT FILE'
+
+DELTA {
+  global:
+    Delta_T;
+    Delta_res;
+    Delta2Time;
+    Delta_spanT;
+    Delta_spanC;
+  local:
+    *;
+};
