@@ -3531,6 +3531,15 @@ int doUnitTest(int test,char *fips, int unicode)
 
   return rv;
 }
+
+/* from iccversion.h*/
+#ifndef ICC_GIT_BRANCH
+#define ICC_GIT_BRANCH         "n/a"
+#endif
+#ifndef ICC_GIT_HASH
+#define ICC_GIT_HASH           "n/a"
+#endif
+
 static void usage(char *prgname,char *text)
 {
    static const char* ICC_vinfo =
