@@ -1326,8 +1326,6 @@ SP800_90STATE RNG_ReSeed(PRNG_CTX *ctx, unsigned char *adata,
 
         /*
           check that the global TRNG type hasn't changed
-          - And that we aren't the synthetic PRNG under TRNG_ALT2
-            which uses an assumed low entropy source (TRNG_MINIMAL) and an SP800_90 PRNG as a compressor
         */
         type = TRNG_type(ictx->trng);
         if (type != GetDefaultTrng())
