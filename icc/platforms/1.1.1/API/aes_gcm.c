@@ -313,7 +313,7 @@ int AES_GCM_Init(ICClib *pcb, AES_GCM_CTX *ain, unsigned char *iv, unsigned long
      }
      if (NULL == a->iv) {
         if (ivlen > IVBLEN) {
-           printf("Here doing OPENSSL_malloc(ivlen): l\n", ivlen);
+           printf("Here doing OPENSSL_malloc(ivlen): %zu\n", ivlen);
            fflush();
            a->iv = OPENSSL_malloc(ivlen);
         }
