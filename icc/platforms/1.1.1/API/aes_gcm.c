@@ -301,10 +301,10 @@ int AES_GCM_Init(ICClib *pcb, AES_GCM_CTX *ain, unsigned char *iv, unsigned long
      if ((ivlen > IVBLEN) && (ivlen > a->ivlen)) {
         if (NULL != a->iv) {
            if (a->ivlen > IVBLEN) {
-              printf("Here doing OPENSSL_free: %l\n", sizeof(a->iv) );
+              printf("Here doing OPENSSL_free: %zu\n", sizeof(a->iv) );
               OPENSSL_free(a->iv);
            }
-           printf("Here doing a->iv = NULL: %l\n", sizeof a->iv);
+           printf("Here doing a->iv = NULL: %zu\n", sizeof a->iv);
            a->iv = NULL;
         }
      }
@@ -389,7 +389,7 @@ int AES_GCM_Init(ICClib *pcb, AES_GCM_CTX *ain, unsigned char *iv, unsigned long
   if (a->iv && !a->ctx) {
      printf("Here doing EVP_CIPHER_CTX_new()\n");
      a->ctx = EVP_CIPHER_CTX_new();
-     printf("Here doing AFTER EVP_CIPHER_CTX_new : %l\n", sizeof(a->ctx));
+     printf("Here doing AFTER EVP_CIPHER_CTX_new : %zu\n", sizeof(a->ctx));
      if (!a->ctx) {
         rv = -1;
      }
