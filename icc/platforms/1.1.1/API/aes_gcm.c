@@ -294,7 +294,6 @@ int AES_GCM_Init(ICClib *pcb, AES_GCM_CTX *ain, unsigned char *iv, unsigned long
                  unsigned char *key, unsigned int klen ) {
 
   printf("Here doing AES_GCM_Init\n");
-  fflush();
   AES_GCM_CTX_t *a = (AES_GCM_CTX_t *)ain;
   int rv = 1;
 
@@ -303,18 +302,15 @@ int AES_GCM_Init(ICClib *pcb, AES_GCM_CTX *ain, unsigned char *iv, unsigned long
         if (NULL != a->iv) {
            if (a->ivlen > IVBLEN) {
               printf("Here doing OPENSSL_free: %zu\n", sizeof(a->iv) );
-              fflush();
               OPENSSL_free(a->iv);
            }
            printf("Here doing a->iv = NULL: %zu\n", sizeof a->iv);
-           fflush();
            a->iv = NULL;
         }
      }
      if (NULL == a->iv) {
         if (ivlen > IVBLEN) {
            printf("Here doing OPENSSL_malloc(ivlen): %zu\n", ivlen);
-           fflush();
            a->iv = OPENSSL_malloc(ivlen);
         }
         else {
@@ -392,10 +388,8 @@ int AES_GCM_Init(ICClib *pcb, AES_GCM_CTX *ain, unsigned char *iv, unsigned long
   /* if we dont have an iv then caller will call again */
   if (a->iv && !a->ctx) {
      printf("Here doing EVP_CIPHER_CTX_new()\n");
-     fflush();
      a->ctx = EVP_CIPHER_CTX_new();
      printf("Here doing AFTER EVP_CIPHER_CTX_new : %zu\n", sizeof(a->ctx));
-     fflush();
      if (!a->ctx) {
         rv = -1;
      }
