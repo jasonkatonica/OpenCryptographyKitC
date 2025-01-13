@@ -301,17 +301,19 @@ int AES_GCM_Init(ICClib *pcb, AES_GCM_CTX *ain, unsigned char *iv, unsigned long
      if ((ivlen > IVBLEN) && (ivlen > a->ivlen)) {
         if (NULL != a->iv) {
            if (a->ivlen > IVBLEN) {
-              fprintf(stderr, "Here doing OPENSSL_free: %zu\n", sizeof(a->iv) );
+              fprintf(stderr, "Here doing OPENSSL_free sizeof(a->iv): %zu\n", sizeof(a->iv) );
               OPENSSL_free(a->iv);
+              fprintf(stderr, "Here doing AFTER OPENSSL_free sizeof(a->iv): %zu\n", sizeof(a->iv) );
            }
-           fprintf(stderr, "Here doing a->iv = NULL: %zu\n", sizeof a->iv);
+           fprintf(stderr, "Here doing a->iv = NULL.");
            a->iv = NULL;
         }
      }
      if (NULL == a->iv) {
         if (ivlen > IVBLEN) {
-           fprintf(stderr, "Here doing OPENSSL_malloc(ivlen): %zu\n", ivlen);
+           fprintf(stderr, "Here doing OPENSSL_malloc(ivlen): %l\n", ivlen);
            a->iv = OPENSSL_malloc(ivlen);
+           fprintf(stderr, "Here doing AFTER OPENSSL_malloc(ivlen) sizeof(&a->iv): %zu\n", sizeof(&a->iv));
         }
         else {
            a->iv = &(a->ivbuf[0]);
@@ -389,7 +391,7 @@ int AES_GCM_Init(ICClib *pcb, AES_GCM_CTX *ain, unsigned char *iv, unsigned long
   if (a->iv && !a->ctx) {
      fprintf(stderr, "Here doing EVP_CIPHER_CTX_new()\n");
      a->ctx = EVP_CIPHER_CTX_new();
-     fprintf(stderr, "Here doing AFTER EVP_CIPHER_CTX_new : %zu\n", sizeof(a->ctx));
+     fprintf(stderr, "Here doing AFTER EVP_CIPHER_CTX_new : %zu\n", sizeof(&a->ctx));
      if (!a->ctx) {
         rv = -1;
      }
