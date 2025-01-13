@@ -293,7 +293,7 @@ void GHASH(AES_GCM_CTX *gcm_ctx,unsigned char *H, unsigned char *Hash, unsigned 
 int AES_GCM_Init(ICClib *pcb, AES_GCM_CTX *ain, unsigned char *iv, unsigned long ivlen,
                  unsigned char *key, unsigned int klen ) {
 
-  printf("Here doing AES_GCM_Init\n");
+  fprintf(stderr, "Here doing AES_GCM_Init\n");
   AES_GCM_CTX_t *a = (AES_GCM_CTX_t *)ain;
   int rv = 1;
 
@@ -301,16 +301,16 @@ int AES_GCM_Init(ICClib *pcb, AES_GCM_CTX *ain, unsigned char *iv, unsigned long
      if ((ivlen > IVBLEN) && (ivlen > a->ivlen)) {
         if (NULL != a->iv) {
            if (a->ivlen > IVBLEN) {
-              printf("Here doing OPENSSL_free: %zu\n", sizeof(a->iv) );
+              fprintf(stderr, "Here doing OPENSSL_free: %zu\n", sizeof(a->iv) );
               OPENSSL_free(a->iv);
            }
-           printf("Here doing a->iv = NULL: %zu\n", sizeof a->iv);
+           fprintf(stderr, "Here doing a->iv = NULL: %zu\n", sizeof a->iv);
            a->iv = NULL;
         }
      }
      if (NULL == a->iv) {
         if (ivlen > IVBLEN) {
-           printf("Here doing OPENSSL_malloc(ivlen): %zu\n", ivlen);
+           fprintf(stderr, "Here doing OPENSSL_malloc(ivlen): %zu\n", ivlen);
            a->iv = OPENSSL_malloc(ivlen);
         }
         else {
@@ -387,9 +387,9 @@ int AES_GCM_Init(ICClib *pcb, AES_GCM_CTX *ain, unsigned char *iv, unsigned long
   /* we need to have an iv before we create a context for the first time */
   /* if we dont have an iv then caller will call again */
   if (a->iv && !a->ctx) {
-     printf("Here doing EVP_CIPHER_CTX_new()\n");
+     fprintf(stderr, "Here doing EVP_CIPHER_CTX_new()\n");
      a->ctx = EVP_CIPHER_CTX_new();
-     printf("Here doing AFTER EVP_CIPHER_CTX_new : %zu\n", sizeof(a->ctx));
+     fprintf(stderr, "Here doing AFTER EVP_CIPHER_CTX_new : %zu\n", sizeof(a->ctx));
      if (!a->ctx) {
         rv = -1;
      }
