@@ -293,6 +293,7 @@ void GHASH(AES_GCM_CTX *gcm_ctx,unsigned char *H, unsigned char *Hash, unsigned 
 int AES_GCM_Init(ICClib *pcb, AES_GCM_CTX *ain, unsigned char *iv, unsigned long ivlen,
                  unsigned char *key, unsigned int klen ) {
 
+  printf("Here doing AES_GCM_Init\n");
   AES_GCM_CTX_t *a = (AES_GCM_CTX_t *)ain;
   int rv = 1;
 
